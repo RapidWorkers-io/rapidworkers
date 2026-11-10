@@ -1,0 +1,27 @@
+[package]
+name = "rapidworkers-mcp"
+description = "MCP server for RapidWorkers: let AI agents hire real people for AI data collection (photos, audio, video), app testing, surveys and microtasks."
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = "https://www.rapidworkers.io/mcp/"
+documentation = "https://www.rapidworkers.io/developers/#mcp"
+readme = "README.md"
+keywords = ["mcp", "mcp-server", "ai-agents", "human-in-the-loop", "crowdsourcing"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "rapidworkers-mcp"
+path = "src/main.rs"
+
+[dependencies]
+reqwest.workspace = true
+# preserve_order: requests are relayed with their keys in the client's order
+serde_json = { workspace = true, features = ["preserve_order"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread"] }
+wiremock.workspace = true

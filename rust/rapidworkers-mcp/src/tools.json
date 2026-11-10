@@ -1,0 +1,1117 @@
+{
+  "server": {
+    "name": "rapidworkers",
+    "title": "RapidWorkers",
+    "url": "https://www.rapidworkers.io/api/mcp/",
+    "instructions": "RapidWorkers hires real people for paid microtasks (social engagement, reviews, sign-ups, surveys, app testing) and AI data collection (photos, audio, video, text), paid in USD from the account balance. Rules: pay at least $0.05 per worker ($0.10 for AI tasks), at least 10 workers per job, $20 minimum deposit. Always call preview_job_cost before any create tool and confirm the total with the user before spending money.\n\nWorkflow: get_account (balance, deposit status) -> get_platform_info (categories, sub-category codes, prefilled job types, country codes) -> preview_job_cost -> show the total and wait for an explicit yes -> create_job, create_prefilled_job or create_ai_task with the quote_id, confirm=true and a new idempotency_key -> list_jobs / get_job -> list_submissions -> approve_submission or reject_submission.\n\nMoney moves on create, extend, cancel (a $0.20 fee on live jobs), approve and tip. Approving pays the worker and cannot be undone, so check each proof against the job instructions first; rejection reasons must say exactly what was missing. Pending submissions are approved automatically after 2 days. If a call that moves money times out, retry it with the same idempotency_key so it is never done twice; after an error answer, fix the cause and use a new key.\n\nA first deposit is required before posting, and earned balance cannot pay for jobs. get_deposit_link returns a checkout URL for the user to open and pay; never pay or enter card details yourself. New jobs can wait for a short moderation review (status pending_review) before going live. AI tasks need access approved by the RapidWorkers team (request_ai_task_access).\n\nEvery create tool takes an optional image_prompt: a detailed description of one image we generate with AI and show workers with the instructions. Write it from the job details; if you do not know what the image should show, ask the user before creating.\n\nWhen the user refers to a job without its id (\"that job\", \"the last one\"), find it with list_jobs (newest first) and tell the user the job_id, title and creation time you are using; if more than one could match (for example several jobs with the same title), ask. list_submissions and get_job name the job they read, so check it is the one meant.\n\nErrors come back as tool results with isError and say how to fix the call."
+  },
+  "rules": {
+    "minPayRate": "0.05",
+    "minAiPayRate": "0.10",
+    "minQuantity": 10,
+    "minDeposit": "20.00"
+  },
+  "tools": [
+    {
+      "name": "get_account",
+      "title": "Get account",
+      "description": "Returns the account balance (USD), whether the account has made a deposit (required before posting jobs), AI task access status and the commission rate added to job costs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Get account",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_platform_info",
+      "title": "Get platform rules and options",
+      "description": "Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least 10 workers per job, $20 minimum deposit, commission and fees), job categories with sub-category codes, the prefilled job types with the link each one expects, AI task types and the allowed ISO country codes. Call it before creating a job.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "enum": [
+              "all",
+              "limits",
+              "categories",
+              "prefilled_job_types",
+              "ai_task_types",
+              "countries"
+            ],
+            "default": "all",
+            "description": "Return only one part: limits (pay, quantity, deposit, fees), categories (with sub-category codes), prefilled_job_types, ai_task_types or countries. Default all."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Get platform rules and options",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_transactions",
+      "title": "List transactions",
+      "description": "Returns the 20 most recent balance transactions (deposits, job charges, refunds).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "List transactions",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_deposit_link",
+      "title": "Create deposit link",
+      "description": "Creates a hosted checkout page and returns its URL for the account owner to open and pay. It does not charge anything by itself. Minimum $20. method \"card\" (Stripe; a 4% processing fee is deducted from the credited amount) or \"crypto\". The balance is credited only after payment completes; check get_account afterwards.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 20,
+            "description": "Amount in USD to deposit, at least 20.00, at most 2 decimals."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "card",
+              "crypto"
+            ],
+            "default": "card",
+            "description": "\"card\" (Stripe checkout; a 4% processing fee is deducted from the credited amount) or \"crypto\" (crypto invoice)."
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Create deposit link",
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "preview_job_cost",
+      "title": "Preview job cost",
+      "description": "Calculates the exact charge for a job or AI task before creating it: pay rate x quantity + commission (+ $10 if pinned), whether the balance covers it, and a quote_id valid for 10 minutes. Every create tool requires this quote_id, so call this first and show the total to the user. Rules: pay_rate >= 0.05 (>= 0.10 for kind \"ai_task\"), quantity >= 10.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "pay_rate": {
+            "type": "number",
+            "minimum": 0.05,
+            "description": "USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks)."
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 10,
+            "description": "Number of workers (one submission each). At least 10; AI tasks at most 20,000."
+          },
+          "pin": {
+            "type": "boolean",
+            "default": false,
+            "description": "Regular jobs only: pin the job to the top of the job list for $10. Default false."
+          }
+        },
+        "required": [
+          "pay_rate",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Preview job cost",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "create_job",
+      "title": "Create job",
+      "description": "Posts a custom job that real workers complete and prove with a screenshot or text. Charges pay_rate x quantity + commission from the balance immediately. Requires quote_id from preview_job_cost, confirm=true after the user approved the total, and an idempotency_key (a new unique string; reuse it only to retry after a timeout). pay_rate >= 0.05 in every category, quantity >= 10. New jobs may be held for a short moderation review before going live. Optional image_prompt: a detailed description of one image we generate with AI and show workers on the job page.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Short title workers see in the job list (up to 200 characters)."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Step-by-step instructions for the worker: what to do, where, and any rules. Plain text: put each step on its own line starting with \"1.\", \"2.\" (or \"-\" for bullets); workers see them as a list and web addresses as links. HTML tags are not needed."
+          },
+          "proof_required": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the worker must submit as proof, e.g. \"Screenshot of your comment showing your username\"."
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Category name from get_platform_info, e.g. \"Social Media\"."
+          },
+          "sub_category": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9 ]{1,40}$",
+            "description": "Sub-category code from get_platform_info within that category, e.g. \"2301\"."
+          },
+          "pay_rate": {
+            "type": "number",
+            "minimum": 0.05,
+            "description": "USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks)."
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 10,
+            "description": "Number of workers (one submission each). At least 10; AI tasks at most 20,000."
+          },
+          "length_in_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Honest estimate of the minutes one worker needs to finish the task."
+          },
+          "countries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 250,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^([A-Za-z]{2}|[Aa][Ll][Ll])$"
+            },
+            "description": "ISO 3166-1 alpha-2 codes of the countries workers must be in, e.g. [\"US\", \"GB\"], or [\"All\"] for every country. get_platform_info lists the allowed codes."
+          },
+          "excluded_countries": {
+            "type": "array",
+            "maxItems": 250,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z]{2}$"
+            },
+            "description": "Only with countries [\"All\"] (or omitted): country codes to leave out."
+          },
+          "pin": {
+            "type": "boolean",
+            "default": false,
+            "description": "Pin the job to the top of the job list for $10 (must match the quote). Default false."
+          },
+          "approve_once_full": {
+            "type": "boolean",
+            "default": false,
+            "description": "true approves and pays every submission automatically once all slots are filled, without review. Default false: review them with list_submissions (unreviewed ones are approved after 2 days)."
+          },
+          "image_prompt": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 4000,
+            "description": "Optional, recommended when a picture would help workers. Describe ONE image we generate with AI (no extra cost) and show workers next to the instructions; it appears a minute or two after creation. We expand your description into a full design brief using the job details, so focus on intent and specifics: what the image is for (e.g. an example of a correct submission), photo or illustration, the exact layout and count (a grid of 2, 3, 4, 6 or 9 works best), what each part shows, and any exact text in quotes (a title, short labels). Example: \"Photorealistic 3x3 grid of the same adult from nine angles (front, left 45, right 45, left profile, right profile, looking up, looking down, tilt left, tilt right), plain light background, a label under each photo, title \"Required face angles\"\". If you do not know what the image should show (the product, page or expected result), ask the user before creating. Leave out if no image is wanted."
+          },
+          "quote_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:=-]{10,2048}$",
+            "description": "quote_id from preview_job_cost for exactly this kind, pay rate, quantity and pin. Valid for 10 minutes."
+          },
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true, and only after the user explicitly approved this action and its cost."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "proof_required",
+          "category",
+          "sub_category",
+          "pay_rate",
+          "quantity",
+          "length_in_minutes",
+          "quote_id",
+          "confirm",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Create job",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "create_prefilled_job",
+      "title": "Create prefilled job",
+      "description": "Posts a ready-made job from a link, e.g. Instagram followers or YouTube likes; get_platform_info lists the types and the link each expects. Charges pay_rate x quantity + commission. Requires quote_id from preview_job_cost (kind \"job\"), confirm=true and an idempotency_key. pay_rate >= 0.05 (default 0.05), quantity >= 10. Set approve_once_full=true to approve all submissions automatically once the job is full. Optional image_prompt: a detailed description of one image we generate with AI and show workers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "facebook_likes",
+              "facebook_shares",
+              "instagram_likes",
+              "instagram_followers",
+              "twitter_likes",
+              "twitter_followers",
+              "twitter_retweets",
+              "ninegag_upvotes",
+              "youtube_likes"
+            ],
+            "description": "Prefilled job type. get_platform_info (section prefilled_job_types) shows the link each type expects."
+          },
+          "link": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2000,
+            "description": "Full URL of the post, profile or page, on the platform the type is for."
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 10,
+            "description": "Number of workers (one submission each). At least 10; AI tasks at most 20,000."
+          },
+          "pay_rate": {
+            "type": "number",
+            "minimum": 0.05,
+            "description": "USD paid to each worker, at least 0.05 (default 0.05), at most 2 decimals.",
+            "default": 0.05
+          },
+          "countries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 250,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^([A-Za-z]{2}|[Aa][Ll][Ll])$"
+            },
+            "description": "ISO 3166-1 alpha-2 codes of the countries workers must be in, e.g. [\"US\", \"GB\"], or [\"All\"] for every country. get_platform_info lists the allowed codes."
+          },
+          "excluded_countries": {
+            "type": "array",
+            "maxItems": 250,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z]{2}$"
+            },
+            "description": "Only with countries [\"All\"] (or omitted): country codes to leave out."
+          },
+          "approve_once_full": {
+            "type": "boolean",
+            "default": false,
+            "description": "true approves and pays every submission automatically once all slots are filled, without review. Default false: review them with list_submissions (unreviewed ones are approved after 2 days)."
+          },
+          "image_prompt": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 4000,
+            "description": "Optional, recommended when a picture would help workers. Describe ONE image we generate with AI (no extra cost) and show workers next to the instructions; it appears a minute or two after creation. We expand your description into a full design brief using the job details, so focus on intent and specifics: what the image is for (e.g. an example of a correct submission), photo or illustration, the exact layout and count (a grid of 2, 3, 4, 6 or 9 works best), what each part shows, and any exact text in quotes (a title, short labels). Example: \"Photorealistic 3x3 grid of the same adult from nine angles (front, left 45, right 45, left profile, right profile, looking up, looking down, tilt left, tilt right), plain light background, a label under each photo, title \"Required face angles\"\". If you do not know what the image should show (the product, page or expected result), ask the user before creating. Leave out if no image is wanted."
+          },
+          "quote_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:=-]{10,2048}$",
+            "description": "quote_id from preview_job_cost for exactly this kind, pay rate, quantity and pin. Valid for 10 minutes."
+          },
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true, and only after the user explicitly approved this action and its cost."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "type",
+          "link",
+          "quantity",
+          "quote_id",
+          "confirm",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Create prefilled job",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "create_ai_task",
+      "title": "Create AI data task",
+      "description": "Posts an AI data-collection task (image, video, audio or text collection, or a custom form) and charges pay_rate x quantity + commission. Requires approved AI task access (see request_ai_task_access), quote_id from preview_job_cost with kind \"ai_task\", confirm=true and an idempotency_key. pay_rate >= 0.10, quantity 10 to 20,000, countries required. Optional image_prompt: a detailed description of one example image we generate with AI and attach as a reference file.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "image_collection",
+              "video_collection",
+              "audio_collection",
+              "text_collection",
+              "custom_data_collection"
+            ],
+            "description": "image_collection, video_collection or audio_collection (workers upload files), text_collection (written answers) or custom_data_collection (a form you define in submission_fields)."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Short title workers see in the job list (up to 200 characters)."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the data is for and what to capture, in plain words workers understand."
+          },
+          "submission_instructions": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact rules each submission must meet (count, framing, length, quality); used to review the work."
+          },
+          "required_file_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Files each worker uploads (1 to 200). Required for image, video and audio collection; ignored otherwise."
+          },
+          "capture_mode": {
+            "type": "string",
+            "enum": [
+              "both",
+              "upload",
+              "record"
+            ],
+            "default": "both",
+            "description": "Audio and video only: \"upload\" files, \"record\" in the browser, or \"both\" (default)."
+          },
+          "submission_fields": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 30,
+            "description": "custom_data_collection only: the form workers fill in, in order. Fields get keys field_1, field_2, ... by position.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "short_text",
+                    "long_text",
+                    "select",
+                    "datetime",
+                    "consent",
+                    "image",
+                    "audio",
+                    "video"
+                  ],
+                  "description": "Field type."
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "Question or label shown to the worker."
+                },
+                "help_text": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "description": "Optional extra instructions for this field."
+                },
+                "required": {
+                  "type": "boolean",
+                  "description": "Whether the worker must answer (default true)."
+                },
+                "min_files": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 20,
+                  "description": "image/audio/video fields: fewest files."
+                },
+                "max_files": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 20,
+                  "description": "image/audio/video fields: most files (default 1)."
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 100,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "description": "select fields: the choices (2 to 100)."
+                },
+                "parent_key": {
+                  "type": "string",
+                  "pattern": "^field_[0-9]{1,2}$",
+                  "description": "Dependent select only: key of an earlier plain select (e.g. \"field_1\")."
+                },
+                "options_by_parent": {
+                  "type": "object",
+                  "description": "Dependent select only: for every option of the parent, the list of choices, e.g. {\"Cars\": [\"Sedan\", \"SUV\"]}."
+                }
+              },
+              "required": [
+                "type",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "pay_rate": {
+            "type": "number",
+            "minimum": 0.1,
+            "description": "USD paid to each worker, at least 0.10, at most 2 decimals."
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 10,
+            "description": "Number of workers (one submission each). At least 10; AI tasks at most 20,000.",
+            "maximum": 20000
+          },
+          "length_in_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Honest estimate of the minutes one worker needs to finish the task."
+          },
+          "reservation_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4320,
+            "description": "Optional: minutes a worker holds a slot while working (1 to 4320). Leave out for the default."
+          },
+          "countries": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 250,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^([A-Za-z]{2}|[Aa][Ll][Ll])$"
+            },
+            "description": "ISO 3166-1 alpha-2 codes of the countries workers must be in, e.g. [\"US\", \"GB\"], or [\"All\"] for every country. get_platform_info lists the allowed codes. Required for AI tasks."
+          },
+          "excluded_countries": {
+            "type": "array",
+            "maxItems": 250,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z]{2}$"
+            },
+            "description": "Only with countries [\"All\"] (or omitted): country codes to leave out."
+          },
+          "image_prompt": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 4000,
+            "description": "Optional, recommended when a picture would help workers. Describe ONE image we generate with AI (no extra cost) and show workers next to the instructions; it appears a minute or two after creation. We expand your description into a full design brief using the job details, so focus on intent and specifics: what the image is for (e.g. an example of a correct submission), photo or illustration, the exact layout and count (a grid of 2, 3, 4, 6 or 9 works best), what each part shows, and any exact text in quotes (a title, short labels). Example: \"Photorealistic 3x3 grid of the same adult from nine angles (front, left 45, right 45, left profile, right profile, looking up, looking down, tilt left, tilt right), plain light background, a label under each photo, title \"Required face angles\"\". If you do not know what the image should show (the product, page or expected result), ask the user before creating. Leave out if no image is wanted."
+          },
+          "quote_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:=-]{10,2048}$",
+            "description": "quote_id from preview_job_cost for exactly this kind, pay rate, quantity and pin. Valid for 10 minutes."
+          },
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true, and only after the user explicitly approved this action and its cost."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "task_type",
+          "title",
+          "description",
+          "submission_instructions",
+          "pay_rate",
+          "quantity",
+          "length_in_minutes",
+          "countries",
+          "quote_id",
+          "confirm",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Create AI data task",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "request_ai_task_access",
+      "title": "Request AI task access",
+      "description": "Sends a request to enable AI data-collection tasks for this account, or returns the current status. An admin reviews requests; until approved, create_ai_task fails.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Optional: what data you plan to collect, so the team can approve faster."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Request AI task access",
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_jobs",
+      "title": "List jobs",
+      "description": "Lists the account's jobs with status (Pending, Active, Completed, Canceled, Rejected), progress and pending submission counts. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "Active",
+              "Completed",
+              "Canceled",
+              "Rejected"
+            ],
+            "description": "Only jobs with this status."
+          },
+          "search": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Regular jobs only: text to find in the title or description."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Page number, starting at 1."
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20,
+            "description": "Items per page, 1 to 100 (default 20)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "List jobs",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_job",
+      "title": "Get job",
+      "description": "Returns one job or AI task by id with its brief, pay, targeting and progress. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Get job",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "extend_job",
+      "title": "Add workers to a job",
+      "description": "Adds worker slots to a job and charges pay_rate x additional_quantity + commission. Regular jobs can only be extended once completed. Requires confirm=true and an idempotency_key. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "additional_quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Worker slots to add; the cost is pay_rate x additional_quantity + commission. AI tasks can have at most 20,000 slots in total."
+          },
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true, and only after the user explicitly approved this action and its cost."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "job_id",
+          "additional_quantity",
+          "confirm",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Add workers to a job",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "cancel_job",
+      "title": "Cancel job",
+      "description": "Cancels a job and refunds the unspent budget to the balance. Pending (not yet live) jobs are refunded in full; live jobs pay a $0.20 fee and cannot be canceled while submissions await review. Requires confirm=true. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true, and only after the user explicitly approved this action and its cost."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "Optional. A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "job_id",
+          "confirm"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Cancel job",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "list_submissions",
+      "title": "List submissions",
+      "description": "Lists submissions for a job, newest first, filtered by status (Pending, Approved, Rejected). Each has the proof text, proof image links and the worker's approval rate. Paginated with page and page_size (max 100). Pending submissions are approved automatically after 2 days if not reviewed. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "Approved",
+              "Rejected"
+            ],
+            "description": "Only submissions with this status, e.g. \"Pending\" to review."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Page number, starting at 1."
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 25,
+            "description": "Items per page, 1 to 100 (default 25)."
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "List submissions",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "approve_submission",
+      "title": "Approve submission",
+      "description": "Approves a submission and pays the worker from the job budget; this cannot be undone. Optional tip $0.01 to $50.00 from the balance, paid to the worker in full. Requires an idempotency_key. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "submission_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "submission_id from list_submissions."
+          },
+          "tip": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 50,
+            "description": "Optional tip in USD (0.01 to 50.00) paid from the balance to the worker in full."
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Optional note the worker sees."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "job_id",
+          "submission_id",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Approve submission",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "reject_submission",
+      "title": "Reject submission",
+      "description": "Rejects a Pending submission; the worker is not paid and sees the reason. Never reject an Approved submission: it has already been paid, and rejecting it does not take the payment back. reason is required and should say exactly what was missing. Requires an idempotency_key. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "submission_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "submission_id from list_submissions."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 1000,
+            "description": "Shown to the worker: exactly what was missing or wrong compared with the instructions."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "job_id",
+          "submission_id",
+          "reason",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Reject submission",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "approve_all_pending",
+      "title": "Approve all pending submissions",
+      "description": "Approves every Pending submission on the job and pays the workers; this cannot be undone. Requires confirm=true and an idempotency_key. Set kind to \"ai_task\" for AI data-collection tasks; the default \"job\" covers regular and prefilled jobs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "description": "Id of the job or AI task (job_id from list_jobs or from the create tool)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "job",
+              "ai_task"
+            ],
+            "default": "job",
+            "description": "\"job\" (default) for regular and prefilled jobs, \"ai_task\" for AI data-collection tasks."
+          },
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Must be true, and only after the user explicitly approved this action and its cost."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,128}$",
+            "description": "A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again only to retry a call that timed out or could not reach the API, so it is never done twice. After an error answer, fix the cause and use a new key: the API replays its stored answer to a reused key."
+          }
+        },
+        "required": [
+          "job_id",
+          "confirm",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Approve all pending submissions",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "block_worker",
+      "title": "Block worker",
+      "description": "Blocks a worker (worker_id from list_submissions of a regular job) from all of the account's jobs and rejects their pending submissions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "worker_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "worker_id of a submission on a regular job (from list_submissions)."
+          }
+        },
+        "required": [
+          "worker_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Block worker",
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "unblock_worker",
+      "title": "Unblock worker",
+      "description": "Removes a worker from the block list.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "worker_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "worker_id from list_blocked_workers."
+          }
+        },
+        "required": [
+          "worker_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Unblock worker",
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_blocked_workers",
+      "title": "List blocked workers",
+      "description": "Lists the workers this account has blocked.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "List blocked workers",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}

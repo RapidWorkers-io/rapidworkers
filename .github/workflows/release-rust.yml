@@ -1,0 +1,38 @@
+# Publishes the rapidworkers and rapidworkers-mcp crates to crates.io with
+# trusted publishing. Trigger: push a tag like rust-v0.1.0. crates.io only lets
+# you add a trusted publisher to a crate that exists, so the very first version
+# is published by hand (see RELEASING.md).
+name: Release Rust
+
+on:
+  push:
+    tags: ["rust-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python3 scripts/check_versions.py --tag "${GITHUB_REF_NAME}"
+      - run: python3 scripts/codegen.py --check
+      - run: cargo test
+        working-directory: rust
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Publish rapidworkers
+        working-directory: rust
+        run: cargo publish -p rapidworkers
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      - name: Publish rapidworkers-mcp
+        working-directory: rust
+        run: cargo publish -p rapidworkers-mcp
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

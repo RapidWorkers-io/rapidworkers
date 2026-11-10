@@ -1,0 +1,65 @@
+# Publishes server.json to the official MCP Registry as io.rapidworkers/rapidworkers.
+# Run it after the npm, PyPI, crates.io and Docker releases of the same version
+# (the registry checks each listed package). Trigger: push a tag like
+# registry-v0.1.0, or run it by hand from the Actions tab.
+# Needs the MCP_PRIVATE_KEY secret, whose public key is a TXT record on rapidworkers.io.
+name: Release MCP Registry
+
+on:
+  push:
+    tags: ["registry-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # attach the .mcpb bundle to a GitHub release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: python3 scripts/check_versions.py
+      - run: python3 scripts/codegen.py --check
+      - name: Build the Claude Desktop extension (.mcpb) and attach it to a release
+        run: |
+          set -euo pipefail
+          version="$(jq -r .version server.json)"
+          tag="mcpb-v${version}"
+          ./scripts/build_mcpb.sh
+          file="dist/rapidworkers-mcp-${version}.mcpb"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "RapidWorkers MCP ${version}" --notes "Claude Desktop extension (MCPB) for the RapidWorkers MCP server."
+          gh release upload "$tag" "$file" --clobber
+          sha="$(sha256sum "$file" | cut -d' ' -f1)"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/rapidworkers-mcp-${version}.mcpb"
+          jq --arg url "$url" --arg sha "$sha" \
+            '.packages += [{"registryType": "mcpb", "identifier": $url, "fileSha256": $sha, "transport": {"type": "stdio"}}]' \
+            server.json > server.tmp && mv server.tmp server.json
+          jq '.packages[] | {registryType, identifier}' server.json
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          archive="mcp-publisher_${os}_${arch}.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+      - name: Authenticate to the MCP Registry
+        run: ./mcp-publisher login dns --domain rapidworkers.io --private-key "${{ secrets.MCP_PRIVATE_KEY }}"
+      - name: Publish server.json
+        run: ./mcp-publisher publish

@@ -1,0 +1,20 @@
+# Go modules are published by their git tag alone (go/v0.1.0 for the module in
+# go/). This workflow only asks the Go module proxy to fetch the new version so
+# pkg.go.dev lists it right away.
+name: Release Go
+
+on:
+  push:
+    tags: ["go/v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch through proxy.golang.org
+        run: |
+          version="${GITHUB_REF_NAME#go/}"
+          curl --fail --silent --show-error "https://proxy.golang.org/github.com/!rapid!workers-io/rapidworkers/go/@v/${version}.info"

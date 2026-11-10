@@ -1,0 +1,25 @@
+[package]
+name = "rapidworkers"
+description = "Official Rust SDK for RapidWorkers: hire real people for microtasks, app testing and AI data collection (photos, audio, video, text)."
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = "https://www.rapidworkers.io/"
+documentation = "https://docs.rs/rapidworkers"
+readme = "README.md"
+keywords = ["mcp", "ai-agents", "crowdsourcing", "human-in-the-loop", "data-collection"]
+categories = ["api-bindings", "web-programming::http-client"]
+
+[dependencies]
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror = "2.0.17"
+tokio = { workspace = true, features = ["time"] }
+uuid = { version = "1.18", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wiremock.workspace = true

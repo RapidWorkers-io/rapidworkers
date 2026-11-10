@@ -1,0 +1,33 @@
+{
+  "name": "rapidworkers-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for RapidWorkers: let AI agents hire real people for AI data collection (photos, audio, video), app testing, surveys and microtasks.",
+  "mcpName": "io.rapidworkers/rapidworkers",
+  "type": "module",
+  "bin": {
+    "rapidworkers-mcp": "bin/rapidworkers-mcp.js"
+  },
+  "main": "./server.js",
+  "exports": {
+    ".": "./server.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["bin/", "server.js", "tools.json", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  },
+  "keywords": [
+    "mcp", "model-context-protocol", "mcp-server", "ai-agents", "human-in-the-loop",
+    "crowdsourcing", "data-collection", "microtasks", "rapidworkers", "claude"
+  ],
+  "homepage": "https://www.rapidworkers.io/mcp/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RapidWorkers-io/rapidworkers.git",
+    "directory": "typescript/mcp"
+  },
+  "bugs": "https://github.com/RapidWorkers-io/rapidworkers/issues",
+  "author": "RapidWorkers",
+  "license": "MIT"
+}

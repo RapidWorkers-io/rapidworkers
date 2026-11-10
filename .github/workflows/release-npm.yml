@@ -1,0 +1,38 @@
+# Publishes rapidworkers and rapidworkers-mcp to npm with trusted publishing
+# (OIDC, provenance attached automatically). Trigger: push a tag like npm-v0.1.0.
+# npm only lets you add a trusted publisher to a package that exists, so the
+# very first version of each package is published by hand (see RELEASING.md).
+name: Release npm
+
+on:
+  push:
+    tags: ["npm-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: python3 scripts/check_versions.py --tag "${GITHUB_REF_NAME}"
+      - run: python3 scripts/codegen.py --check
+      - name: Test
+        run: |
+          (cd typescript/rapidworkers && npm test)
+          (cd typescript/mcp && npm test)
+      - name: Publish rapidworkers
+        working-directory: typescript/rapidworkers
+        run: npm publish --access public
+      - name: Publish rapidworkers-mcp
+        working-directory: typescript/mcp
+        run: npm publish --access public

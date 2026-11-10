@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rapidworkers"
+dynamic = ["version"]
+description = "Official Python SDK for RapidWorkers: hire real people for microtasks, app testing and AI data collection (photos, audio, video, text)."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "RapidWorkers" }]
+keywords = [
+    "rapidworkers", "crowdsourcing", "microtasks", "human-in-the-loop", "data-collection",
+    "ai-training-data", "app-testing", "mcp", "ai-agents", "sdk",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = ["httpx>=0.25,<1"]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "respx>=0.21", "pytest-asyncio>=0.23"]
+
+[project.urls]
+Homepage = "https://www.rapidworkers.io/"
+Documentation = "https://www.rapidworkers.io/developers/"
+Source = "https://github.com/RapidWorkers-io/rapidworkers"
+Issues = "https://github.com/RapidWorkers-io/rapidworkers/issues"
+
+[tool.hatch.version]
+path = "src/rapidworkers/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rapidworkers"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

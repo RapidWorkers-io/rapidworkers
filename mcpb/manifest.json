@@ -1,0 +1,142 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/dist/mcpb-manifest-v0.3.schema.json",
+  "manifest_version": "0.3",
+  "name": "rapidworkers",
+  "display_name": "RapidWorkers",
+  "version": "0.1.0",
+  "description": "Hire real people for AI data collection (photos, audio, video), app testing and microtasks.",
+  "long_description": "RapidWorkers connects your AI assistant to people who do paid microtasks on their own devices: AI training data collection (photos, audio, video, text), real-device app and website testing, surveys and native-speaker checks. The assistant gets a cost quote, asks you to confirm it, posts the task, then reviews each submission against your brief. Requires a RapidWorkers API key.",
+  "author": {
+    "name": "RapidWorkers",
+    "url": "https://www.rapidworkers.io/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RapidWorkers-io/rapidworkers"
+  },
+  "homepage": "https://www.rapidworkers.io/mcp/",
+  "documentation": "https://www.rapidworkers.io/developers/#mcp",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/bin/rapidworkers-mcp.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/bin/rapidworkers-mcp.js"
+      ],
+      "env": {
+        "RAPIDWORKERS_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "get_account",
+      "description": "Returns the account balance (USD), whether the account has made a deposit (required before posting jobs), AI task access status and the commission rate added to job costs."
+    },
+    {
+      "name": "get_platform_info",
+      "description": "Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least 10 workers per job, $20 minimum deposit, commission and fees), job categories with sub-category codes, the prefilled jo"
+    },
+    {
+      "name": "list_transactions",
+      "description": "Returns the 20 most recent balance transactions (deposits, job charges, refunds)."
+    },
+    {
+      "name": "get_deposit_link",
+      "description": "Creates a hosted checkout page and returns its URL for the account owner to open and pay."
+    },
+    {
+      "name": "preview_job_cost",
+      "description": "Calculates the exact charge for a job or AI task before creating it: pay rate x quantity + commission (+ $10 if pinned), whether the balance covers it, and a quote_id valid for 10 minutes."
+    },
+    {
+      "name": "create_job",
+      "description": "Posts a custom job that real workers complete and prove with a screenshot or text."
+    },
+    {
+      "name": "create_prefilled_job",
+      "description": "Posts a ready-made job from a link, e.g."
+    },
+    {
+      "name": "create_ai_task",
+      "description": "Posts an AI data-collection task (image, video, audio or text collection, or a custom form) and charges pay_rate x quantity + commission."
+    },
+    {
+      "name": "request_ai_task_access",
+      "description": "Sends a request to enable AI data-collection tasks for this account, or returns the current status."
+    },
+    {
+      "name": "list_jobs",
+      "description": "Lists the account's jobs with status (Pending, Active, Completed, Canceled, Rejected), progress and pending submission counts."
+    },
+    {
+      "name": "get_job",
+      "description": "Returns one job or AI task by id with its brief, pay, targeting and progress."
+    },
+    {
+      "name": "extend_job",
+      "description": "Adds worker slots to a job and charges pay_rate x additional_quantity + commission."
+    },
+    {
+      "name": "cancel_job",
+      "description": "Cancels a job and refunds the unspent budget to the balance."
+    },
+    {
+      "name": "list_submissions",
+      "description": "Lists submissions for a job, newest first, filtered by status (Pending, Approved, Rejected)."
+    },
+    {
+      "name": "approve_submission",
+      "description": "Approves a submission and pays the worker from the job budget; this cannot be undone."
+    },
+    {
+      "name": "reject_submission",
+      "description": "Rejects a Pending submission; the worker is not paid and sees the reason."
+    },
+    {
+      "name": "approve_all_pending",
+      "description": "Approves every Pending submission on the job and pays the workers; this cannot be undone."
+    },
+    {
+      "name": "block_worker",
+      "description": "Blocks a worker (worker_id from list_submissions of a regular job) from all of the account's jobs and rejects their pending submissions."
+    },
+    {
+      "name": "unblock_worker",
+      "description": "Removes a worker from the block list."
+    },
+    {
+      "name": "list_blocked_workers",
+      "description": "Lists the workers this account has blocked."
+    }
+  ],
+  "keywords": [
+    "crowdsourcing",
+    "human-in-the-loop",
+    "data-collection",
+    "app-testing",
+    "microtasks"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "RapidWorkers API key",
+      "description": "Create one at https://www.rapidworkers.io/dashboard/api-management/",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

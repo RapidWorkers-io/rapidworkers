@@ -1,0 +1,105 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.rapidworkers/rapidworkers",
+  "title": "RapidWorkers",
+  "description": "Hire real people for AI data collection (photos, audio, video), app testing and microtasks.",
+  "version": "0.1.0",
+  "websiteUrl": "https://www.rapidworkers.io/mcp/",
+  "repository": {
+    "url": "https://github.com/RapidWorkers-io/rapidworkers",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://www.rapidworkers.io/favicon/favicon-192.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "192x192"
+      ]
+    },
+    {
+      "src": "https://www.rapidworkers.io/favicon/favicon-512.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://www.rapidworkers.io/api/mcp/"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "rapidworkers-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "RAPIDWORKERS_API_KEY",
+          "description": "API key from https://www.rapidworkers.io/dashboard/api-management/",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "pypi",
+      "identifier": "rapidworkers-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "RAPIDWORKERS_API_KEY",
+          "description": "API key from https://www.rapidworkers.io/dashboard/api-management/",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "cargo",
+      "identifier": "rapidworkers-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "RAPIDWORKERS_API_KEY",
+          "description": "API key from https://www.rapidworkers.io/dashboard/api-management/",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/rapidworkers-io/rapidworkers-mcp:0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "RAPIDWORKERS_API_KEY",
+          "description": "API key from https://www.rapidworkers.io/dashboard/api-management/",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

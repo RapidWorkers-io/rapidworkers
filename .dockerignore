@@ -1,0 +1,5 @@
+*
+!typescript/mcp/package.json
+!typescript/mcp/server.js
+!typescript/mcp/tools.json
+!typescript/mcp/bin

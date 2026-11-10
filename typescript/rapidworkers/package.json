@@ -1,0 +1,55 @@
+{
+  "name": "rapidworkers",
+  "version": "0.1.0",
+  "description": "Official JavaScript/TypeScript SDK for RapidWorkers: hire real people for microtasks, app testing and AI data collection (photos, audio, video, text).",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "generated.js",
+    "generated.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "typecheck": "tsc --noEmit -p test/tsconfig.json"
+  },
+  "keywords": [
+    "rapidworkers",
+    "crowdsourcing",
+    "microtasks",
+    "human-in-the-loop",
+    "data-collection",
+    "ai-training-data",
+    "app-testing",
+    "mcp",
+    "ai-agents",
+    "sdk"
+  ],
+  "homepage": "https://www.rapidworkers.io/developers/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RapidWorkers-io/rapidworkers.git",
+    "directory": "typescript/rapidworkers"
+  },
+  "bugs": "https://github.com/RapidWorkers-io/rapidworkers/issues",
+  "author": "RapidWorkers",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
