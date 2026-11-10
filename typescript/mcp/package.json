@@ -15,7 +15,7 @@
   "files": ["bin/", "server.js", "tools.json", "README.md", "LICENSE"],
   "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "mcp", "model-context-protocol", "mcp-server", "ai-agents", "human-in-the-loop",

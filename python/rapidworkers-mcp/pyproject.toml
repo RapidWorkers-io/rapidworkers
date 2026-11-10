@@ -9,7 +9,7 @@ description = "MCP server for RapidWorkers: let AI agents hire real people for A
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "RapidWorkers" }]
 keywords = [
     "mcp", "model-context-protocol", "mcp-server", "ai-agents", "human-in-the-loop",

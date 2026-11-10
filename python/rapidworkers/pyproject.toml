@@ -9,7 +9,7 @@ description = "Official Python SDK for RapidWorkers: hire real people for microt
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "RapidWorkers" }]
 keywords = [
     "rapidworkers", "crowdsourcing", "microtasks", "human-in-the-loop", "data-collection",

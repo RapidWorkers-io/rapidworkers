@@ -25,7 +25,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test test/*.test.js",
     "typecheck": "tsc --noEmit -p test/tsconfig.json"
   },
   "keywords": [
