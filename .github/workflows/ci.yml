@@ -102,7 +102,7 @@ jobs:
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
             | docker run -i --rm rapidworkers-mcp:ci > out.jsonl
-          python3 -c "import json; a={m['id']: m for m in map(json.loads, open('out.jsonl'))}; n=len(a[2]['result']['tools']); print(n, 'tools'); assert n == 20"
+          python3 -c "import json; a={m['id']: m for m in map(json.loads, open('out.jsonl'))}; n=len(a[2]['result']['tools']); print(n, 'tools'); assert n == len(json.load(open('spec/tools.json'))['tools'])"
 
   mcpb:
     runs-on: ubuntu-latest
