@@ -30,7 +30,7 @@ Everything below is public. Use brand accounts and a brand email, never a person
 ### PyPI (no first manual upload needed)
 
 1. Create a PyPI account and turn on 2FA.
-2. Under Account settings, then Publishing, choose **Add a new pending publisher** twice: once for project `rapidworkers` and once for `rapidworkers-mcp`. Use owner `RapidWorkers-io`, repository `rapidworkers`, workflow `release-python.yml` and environment `pypi`.
+2. Under Account settings, then Publishing, choose **Add a new pending publisher** twice. Use owner `RapidWorkers-io`, repository `rapidworkers` and workflow `release-python.yml` for both. Set environment `pypi` for project `rapidworkers` and `pypi-mcp` for project `rapidworkers-mcp`. PyPI refuses two pending publishers with identical settings.
 3. Push `python-v0.1.0`.
 
 ### npm (first version by hand)
