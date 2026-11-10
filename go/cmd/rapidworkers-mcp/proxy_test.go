@@ -347,8 +347,8 @@ func TestBundledSpec(t *testing.T) {
 	if err := json.Unmarshal(s.Tools, &tools); err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 20 {
-		t.Fatalf("%d tools in the bundled spec, want 20", len(tools))
+	if len(tools) != 22 {
+		t.Fatalf("%d tools in the bundled spec, want 22", len(tools))
 	}
 	mustEqual(t, s.Server.URL, rapidworkers.ServerURL)
 	mustEqual(t, s.Server.Name, "rapidworkers")
@@ -543,7 +543,7 @@ func TestStdioWithoutKeyEndToEnd(t *testing.T) {
 	init := answers[1]["result"].(map[string]any)
 	mustEqual(t, init["serverInfo"].(map[string]any)["name"], "rapidworkers")
 	mustEqual(t, init["protocolVersion"], "2025-06-18")
-	mustEqual(t, len(answers[2]["result"].(map[string]any)["tools"].([]any)), 20)
+	mustEqual(t, len(answers[2]["result"].(map[string]any)["tools"].([]any)), 22)
 	call := answers[3]["result"].(map[string]any)
 	mustEqual(t, call["isError"], true)
 	if text := call["content"].([]any)[0].(map[string]any)["text"].(string); !strings.Contains(text, "RAPIDWORKERS_API_KEY") {

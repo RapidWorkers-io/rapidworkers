@@ -87,7 +87,7 @@ fn stdio_without_key_lists_tools_and_explains_calls() {
         .contains("RAPIDWORKERS_API_KEY is not set"));
 
     let tools = answers["2"]["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 20);
+    assert_eq!(tools.len(), 22);
     assert!(tools.iter().any(|tool| tool["name"] == "create_ai_task"));
 
     let call = &answers["3"]["result"];

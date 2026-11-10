@@ -99,7 +99,7 @@ test('over real stdio without a key: lists tools and explains calls', () => {
     assert.equal(answers[1].result.serverInfo.name, 'rapidworkers');
     assert.equal(answers[1].result.protocolVersion, '2025-06-18');
     assert.equal(answers[2].result.tools.length, SPEC.tools.length);
-    assert.equal(SPEC.tools.length, 20);
+    assert.equal(SPEC.tools.length, 22);
     assert.equal(answers[3].result.isError, true);
     assert.match(answers[3].result.content[0].text, /RAPIDWORKERS_API_KEY/);
     assert.match(done.stderr, /not set/);

@@ -62,17 +62,19 @@ The package relays every request to the hosted server, so its tools, instruction
 | `preview_job_cost` | Cost quote with a `quote_id` (nothing is charged) |
 | `create_job` | Post a custom microtask |
 | `create_prefilled_job` | Post a ready-made job from a link |
+| `create_survey` | Post a paid survey with your questions, screeners and attention checks |
 | `create_ai_task` | Collect photos, audio, video or text for AI work |
 | `request_ai_task_access` | Ask the RapidWorkers team to enable AI tasks |
 | `list_jobs` / `get_job` | Your jobs and AI tasks, newest first |
 | `extend_job` / `cancel_job` | Add workers, or cancel and refund the rest |
 | `list_submissions` | Proofs to review |
+| `get_survey_results` | Aggregated survey answers, response funnel and quality bands |
 | `approve_submission` / `reject_submission` / `approve_all_pending` | Pay or reject work |
 | `block_worker` / `unblock_worker` / `list_blocked_workers` | Manage who can work for you |
 
 ## Rules
 
-At least $0.05 per worker ($0.10 for AI tasks), at least 10 workers per job, $20 minimum deposit. A first deposit is required before posting. Approving pays the worker and cannot be undone; pending submissions are approved automatically after 2 days.
+At least $0.05 per worker ($0.10 for AI tasks, $0.50 per survey response), at least 10 workers per job, $20 minimum deposit. A first deposit is required before posting. Approving pays the worker and cannot be undone; pending submissions are approved automatically after 2 days.
 
 ## Links
 

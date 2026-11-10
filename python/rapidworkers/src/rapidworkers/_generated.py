@@ -15,6 +15,7 @@ TOOL_META: dict[str, dict[str, bool]] = {
     'preview_job_cost': {'read_only': True, 'idempotency_key': False, 'retry': True},
     'create_job': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'create_prefilled_job': {'read_only': False, 'idempotency_key': True, 'retry': True},
+    'create_survey': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'create_ai_task': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'request_ai_task_access': {'read_only': False, 'idempotency_key': False, 'retry': True},
     'list_jobs': {'read_only': True, 'idempotency_key': False, 'retry': True},
@@ -22,6 +23,7 @@ TOOL_META: dict[str, dict[str, bool]] = {
     'extend_job': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'cancel_job': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'list_submissions': {'read_only': True, 'idempotency_key': False, 'retry': True},
+    'get_survey_results': {'read_only': True, 'idempotency_key': False, 'retry': True},
     'approve_submission': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'reject_submission': {'read_only': False, 'idempotency_key': True, 'retry': True},
     'approve_all_pending': {'read_only': False, 'idempotency_key': True, 'retry': True},
@@ -49,17 +51,22 @@ class SyncTools:
     def get_platform_info(
         self,
         *,
-        section: Literal['all', 'limits', 'categories', 'prefilled_job_types', 'ai_task_types', 'countries'] | None = None,
+        section: Literal['all', 'limits', 'categories', 'prefilled_job_types', 'ai_task_types', 'survey_builder', 'countries'] | None = None,
     ) -> dict[str, Any]:
-        """Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least
-        10 workers per job, $20 minimum deposit, commission and fees), job categories
-        with sub-category codes, the prefilled job types with the link each one expects,
-        AI task types and the allowed ISO country codes. Call it before creating a job.
+        """Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, $0.50
+        per survey response, at least 10 workers per job, $20 minimum deposit,
+        commission and fees), job categories with sub-category codes, the prefilled job
+        types with the link each one expects, AI task types, the survey builder options
+        (question types, scale presets, attention check templates, limits and audience
+        codes) and the allowed ISO country codes. Call it before creating a job or
+        survey.
 
         Args:
             section: Return only one part: limits (pay, quantity, deposit, fees),
-                categories (with sub-category codes), prefilled_job_types, ai_task_types
-                or countries. Default all.
+                categories (with sub-category codes), prefilled_job_types,
+                ai_task_types, survey_builder (question types, scale presets, attention
+                check templates, survey limits and audience codes) or countries. Default
+                all.
         """
         return self._call_tool(
             "get_platform_info",
@@ -106,22 +113,24 @@ class SyncTools:
         *,
         pay_rate: float,
         quantity: int,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         pin: bool | None = None,
     ) -> dict[str, Any]:
-        """Calculates the exact charge for a job or AI task before creating it: pay rate x
-        quantity + commission (+ $10 if pinned), whether the balance covers it, and a
-        quote_id valid for 10 minutes. Every create tool requires this quote_id, so call
-        this first and show the total to the user. Rules: pay_rate >= 0.05 (>= 0.10 for
-        kind "ai_task"), quantity >= 10.
+        """Calculates the exact charge for a job, survey or AI task before creating it: pay
+        rate x quantity + commission (+ $10 if a regular job is pinned), whether the
+        balance covers it, and a quote_id valid for 10 minutes. Every create tool
+        requires this quote_id, so call this first with the kind you will create ("job",
+        "survey" or "ai_task") and show the total to the user. Rules: pay_rate >= 0.05
+        (>= 0.10 for kind "ai_task", >= 0.50 for kind "survey"), quantity >= 10 (at most
+        20,000 for AI tasks and surveys), pin only for kind "job".
 
         Args:
             pay_rate: USD paid to each worker, at most 2 decimals. At least 0.05
-                (0.10 for AI tasks).
+                (0.10 for AI tasks, 0.50 for surveys).
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+                and surveys at most 20,000.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             pin: Regular jobs only: pin the job to the top of the job list for $10.
                 Default false.
         """
@@ -176,9 +185,9 @@ class SyncTools:
             sub_category: Sub-category code from get_platform_info within that
                 category, e.g. "2301".
             pay_rate: USD paid to each worker, at most 2 decimals. At least 0.05
-                (0.10 for AI tasks).
+                (0.10 for AI tasks, 0.50 for surveys).
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
+                and surveys at most 20,000.
             length_in_minutes: Honest estimate of the minutes one worker needs to
                 finish the task.
             quote_id: quote_id from preview_job_cost for exactly this kind, pay
@@ -267,7 +276,7 @@ class SyncTools:
             link: Full URL of the post, profile or page, on the platform the type is
                 for.
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
+                and surveys at most 20,000.
             quote_id: quote_id from preview_job_cost for exactly this kind, pay
                 rate, quantity and pin. Valid for 10 minutes.
             confirm: Must be true, and only after the user explicitly approved this
@@ -320,6 +329,117 @@ class SyncTools:
             },
         )
 
+    def create_survey(
+        self,
+        *,
+        title: str,
+        description: str,
+        questions: Sequence[Mapping[str, Any]],
+        pay_rate: float,
+        quantity: int,
+        countries: Sequence[str],
+        quote_id: str,
+        confirm: Literal[True],
+        length_in_minutes: int | None = None,
+        excluded_countries: Sequence[str] | None = None,
+        audience: Mapping[str, Any] | None = None,
+        block_paste: bool | None = None,
+        image_prompt: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Posts a survey that real workers answer on RapidWorkers, built from your
+        questions (choice, dropdown, rating with stars, agree scales or NPS, matrix,
+        ranking, text, number, date, consent, text blocks and attention checks), and
+        charges pay_rate x quantity + commission. No extra access is needed. Requires
+        quote_id from preview_job_cost with kind "survey", confirm=true and an
+        idempotency_key. pay_rate >= 0.50 per response, quantity 10 to 20,000, countries
+        required. Questions are keyed q_1, q_2, ... by position (text blocks count):
+        show_if may only point at an earlier question. Up to 5 screening questions must
+        come first; screened-out workers are not paid and free their slot. Add 1
+        attention check (2 for surveys over 5 minutes). Every response gets a quality
+        score; failed attention checks, impossible speed and repeat devices are rejected
+        automatically. Optional image_prompt: one image we generate with AI and show
+        workers with the survey intro.
+
+        Args:
+            title: Short title workers see in the survey list (up to 200
+                characters).
+            description: Intro workers read before they start: what the survey is
+                about and anything they should know. Plain text (up to 5,000
+                characters), each paragraph on its own line. Say nothing about which
+                answers screen people out.
+            questions: The survey items in order: 1 to 60, at most 50 that take an
+                answer. Their keys are q_1, q_2, ... by position (text blocks count);
+                show_if refers to them. Example: [{"type":"single_choice","label":"Do
+                you drive a car at least once a week?","options":["Yes","No"],"screener"
+                :true,"disqualify":["No"]},{"type":"rating","label":"How likely are you
+                to recommend your car brand to a
+                friend?","scale":{"preset":"nps"}},{"type":"long_text","label":"What
+                would make you more likely to recommend it?","show_if":[{"question":"q_2
+                ","operator":"lte","value":"6"}]},{"type":"attention_check","template":"
+                select_option"}]
+            pay_rate: USD paid for each completed response, at least 0.50, at most 2
+                decimals. Workers see the effective hourly pay (pay_rate x 60 /
+                minutes).
+            quantity: Number of responses wanted (one per worker), 10 to 20,000.
+            countries: ISO 3166-1 alpha-2 codes of the countries workers must be in,
+                e.g. ["US", "GB"], or ["All"] for every country. get_platform_info lists
+                the allowed codes. Required for surveys.
+            quote_id: quote_id from preview_job_cost for exactly this kind, pay
+                rate, quantity and pin. Valid for 10 minutes.
+            confirm: Must be true, and only after the user explicitly approved this
+                action and its cost.
+            length_in_minutes: Optional: honest minutes one response takes. Leave
+                out for our estimate from the questions (about 8 seconds per closed
+                question, 30 per short text and 60 per long text answer).
+            excluded_countries: Only with countries ["All"] (or omitted): country
+                codes to leave out.
+            audience: Optional: who may answer, on top of countries. Leave out for
+                everyone. Only workers with a completed profile match a filter, so every
+                filter shrinks the pool: set only what the user asked for.
+            block_paste: true stops workers pasting into text answers, so they must
+                type them. Default false; pasted answers are flagged either way.
+            image_prompt: Optional, recommended when a picture would help workers.
+                Describe ONE image we generate with AI (no extra cost) and show workers
+                next to the instructions; it appears a minute or two after creation. We
+                expand your description into a full design brief using the job details,
+                so focus on intent and specifics: what the image is for (e.g. an example
+                of a correct submission), photo or illustration, the exact layout and
+                count (a grid of 2, 3, 4, 6 or 9 works best), what each part shows, and
+                any exact text in quotes (a title, short labels). Example:
+                "Photorealistic 3x3 grid of the same adult from nine angles (front, left
+                45, right 45, left profile, right profile, looking up, looking down,
+                tilt left, tilt right), plain light background, a label under each
+                photo, title "Required face angles"". If you do not know what the image
+                should show (the product, page or expected result), ask the user before
+                creating. Leave out if no image is wanted.
+            idempotency_key: Optional. Created automatically when omitted and reused
+                on retries. A new unique string for this action (e.g. a UUID; letters,
+                digits, _ . : - only, up to 128). Send the same key again only to retry
+                a call that timed out or could not reach the API, so it is never done
+                twice. After an error answer, fix the cause and use a new key: the API
+                replays its stored answer to a reused key.
+        """
+        return self._call_tool(
+            "create_survey",
+            {
+                "title": title,
+                "description": description,
+                "questions": questions,
+                "pay_rate": pay_rate,
+                "quantity": quantity,
+                "countries": countries,
+                "quote_id": quote_id,
+                "confirm": confirm,
+                "length_in_minutes": length_in_minutes,
+                "excluded_countries": excluded_countries,
+                "audience": audience,
+                "block_paste": block_paste,
+                "image_prompt": image_prompt,
+                "idempotency_key": idempotency_key,
+            },
+        )
+
     def create_ai_task(
         self,
         *,
@@ -351,7 +471,8 @@ class SyncTools:
         Args:
             task_type: image_collection, video_collection or audio_collection
                 (workers upload files), text_collection (written answers) or
-                custom_data_collection (a form you define in submission_fields).
+                custom_data_collection (a form you define in submission_fields). For a
+                questionnaire use create_survey instead.
             title: Short title workers see in the job list (up to 200 characters).
             description: What the data is for and what to capture, in plain words
                 workers understand.
@@ -359,7 +480,7 @@ class SyncTools:
                 framing, length, quality); used to review the work.
             pay_rate: USD paid to each worker, at least 0.10, at most 2 decimals.
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
+                and surveys at most 20,000.
             length_in_minutes: Honest estimate of the minutes one worker needs to
                 finish the task.
             countries: ISO 3166-1 alpha-2 codes of the countries workers must be in,
@@ -446,19 +567,20 @@ class SyncTools:
     def list_jobs(
         self,
         *,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         status: Literal['Pending', 'Active', 'Completed', 'Canceled', 'Rejected'] | None = None,
         search: str | None = None,
         page: int | None = None,
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """Lists the account's jobs with status (Pending, Active, Completed, Canceled,
-        Rejected), progress and pending submission counts. Set kind to "ai_task" for AI
-        data-collection tasks; the default "job" covers regular and prefilled jobs.
+        Rejected), progress and pending submission counts, newest first. Set kind to
+        "survey" for surveys made with create_survey or "ai_task" for AI data-collection
+        tasks; the default "job" covers regular and prefilled jobs.
 
         Args:
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             status: Only jobs with this status.
             search: Regular jobs only: text to find in the title or description.
             page: Page number, starting at 1.
@@ -479,17 +601,19 @@ class SyncTools:
         self,
         *,
         job_id: str,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
     ) -> dict[str, Any]:
-        """Returns one job or AI task by id with its brief, pay, targeting and progress.
-        Set kind to "ai_task" for AI data-collection tasks; the default "job" covers
-        regular and prefilled jobs.
+        """Returns one job, survey or AI task by id with its brief, pay, targeting and
+        progress; for a survey also its questions (keys q_1, q_2, ... with option ids),
+        audience, response counts and quality bands. Set kind to "survey" for surveys
+        made with create_survey or "ai_task" for AI data-collection tasks; the default
+        "job" covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
         """
         return self._call_tool(
             "get_job",
@@ -505,24 +629,26 @@ class SyncTools:
         job_id: str,
         additional_quantity: int,
         confirm: Literal[True],
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Adds worker slots to a job and charges pay_rate x additional_quantity +
-        commission. Regular jobs can only be extended once completed. Requires
-        confirm=true and an idempotency_key. Set kind to "ai_task" for AI data-
-        collection tasks; the default "job" covers regular and prefilled jobs.
+        commission. Regular jobs can only be extended once completed; surveys and AI
+        tasks can have at most 20,000 slots in total. Requires confirm=true and an
+        idempotency_key. Set kind to "survey" for surveys made with create_survey or
+        "ai_task" for AI data-collection tasks; the default "job" covers regular and
+        prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             additional_quantity: Worker slots to add; the cost is pay_rate x
-                additional_quantity + commission. AI tasks can have at most 20,000 slots
-                in total.
+                additional_quantity + commission. AI tasks and surveys can have at most
+                20,000 slots in total.
             confirm: Must be true, and only after the user explicitly approved this
                 action and its cost.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. A new unique string for this action (e.g. a UUID; letters,
                 digits, _ . : - only, up to 128). Send the same key again only to retry
@@ -546,22 +672,22 @@ class SyncTools:
         *,
         job_id: str,
         confirm: Literal[True],
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Cancels a job and refunds the unspent budget to the balance. Pending (not yet
         live) jobs are refunded in full; live jobs pay a $0.20 fee and cannot be
         canceled while submissions await review. Requires confirm=true. Set kind to
-        "ai_task" for AI data-collection tasks; the default "job" covers regular and
-        prefilled jobs.
+        "survey" for surveys made with create_survey or "ai_task" for AI data-collection
+        tasks; the default "job" covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             confirm: Must be true, and only after the user explicitly approved this
                 action and its cost.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. Optional. A new unique string for this action (e.g. a UUID;
                 letters, digits, _ . : - only, up to 128). Send the same key again only
@@ -583,24 +709,31 @@ class SyncTools:
         self,
         *,
         job_id: str,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         status: Literal['Pending', 'Approved', 'Rejected'] | None = None,
+        quality_band: Literal['good', 'check', 'likely_bad'] | None = None,
         page: int | None = None,
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """Lists submissions for a job, newest first, filtered by status (Pending,
         Approved, Rejected). Each has the proof text, proof image links and the worker's
-        approval rate. Paginated with page and page_size (max 100). Pending submissions
-        are approved automatically after 2 days if not reviewed. Set kind to "ai_task"
+        approval rate. For kind "survey" each response has its answers (question key,
+        label and the answer as text), a quality score (0-100), a quality band (good,
+        check, likely_bad) with the flags behind it, and whether it was rejected
+        automatically; quality_band filters by band. Paginated with page and page_size
+        (max 100). Pending submissions are approved automatically after 2 days if not
+        reviewed. Set kind to "survey" for surveys made with create_survey or "ai_task"
         for AI data-collection tasks; the default "job" covers regular and prefilled
         jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             status: Only submissions with this status, e.g. "Pending" to review.
+            quality_band: Surveys only: only responses in this quality band, e.g.
+                "likely_bad" to check the weakest first.
             page: Page number, starting at 1.
             page_size: Items per page, 1 to 100 (default 25).
         """
@@ -610,8 +743,44 @@ class SyncTools:
                 "job_id": job_id,
                 "kind": kind,
                 "status": status,
+                "quality_band": quality_band,
                 "page": page,
                 "page_size": page_size,
+            },
+        )
+
+    def get_survey_results(
+        self,
+        *,
+        job_id: str,
+        include: Literal['valid', 'approved', 'all'] | None = None,
+        text_samples: int | None = None,
+    ) -> dict[str, Any]:
+        """Returns the aggregated results of a survey (job_id from create_survey or
+        list_jobs with kind "survey"): the response funnel (started, screened out,
+        submitted, pending, approved, rejected), median time and effective hourly pay,
+        quality bands, and per question the answer counts and percentages, means and
+        medians, the NPS score, rankings, number ranges and the latest text answers.
+        include "valid" (default: pending and approved responses), "approved" or "all"
+        (adds rejected); screened-out workers never count. For each response in full use
+        list_submissions with kind "survey".
+
+        Args:
+            job_id: Id of the survey (job_id from create_survey, or list_jobs with
+                kind "survey").
+            include: Which responses count: "valid" (default) pending and approved
+                ones, "approved" only approved ones, "all" also the rejected ones.
+                Screened-out workers never count.
+            text_samples: Latest written answers to show per text question and
+                "Other" box (0 to 50, default 10), each cut to 500 characters.
+                list_submissions has every answer in full.
+        """
+        return self._call_tool(
+            "get_survey_results",
+            {
+                "job_id": job_id,
+                "include": include,
+                "text_samples": text_samples,
             },
         )
 
@@ -620,22 +789,23 @@ class SyncTools:
         *,
         job_id: str,
         submission_id: int,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         tip: float | None = None,
         notes: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Approves a submission and pays the worker from the job budget; this cannot be
         undone. Optional tip $0.01 to $50.00 from the balance, paid to the worker in
-        full. Requires an idempotency_key. Set kind to "ai_task" for AI data-collection
-        tasks; the default "job" covers regular and prefilled jobs.
+        full. Requires an idempotency_key. Set kind to "survey" for surveys made with
+        create_survey or "ai_task" for AI data-collection tasks; the default "job"
+        covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             submission_id: submission_id from list_submissions.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             tip: Optional tip in USD (0.01 to 50.00) paid from the balance to the
                 worker in full.
             notes: Optional note the worker sees.
@@ -664,23 +834,24 @@ class SyncTools:
         job_id: str,
         submission_id: int,
         reason: str,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Rejects a Pending submission; the worker is not paid and sees the reason. Never
         reject an Approved submission: it has already been paid, and rejecting it does
         not take the payment back. reason is required and should say exactly what was
-        missing. Requires an idempotency_key. Set kind to "ai_task" for AI data-
-        collection tasks; the default "job" covers regular and prefilled jobs.
+        missing. Requires an idempotency_key. Set kind to "survey" for surveys made with
+        create_survey or "ai_task" for AI data-collection tasks; the default "job"
+        covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             submission_id: submission_id from list_submissions.
             reason: Shown to the worker: exactly what was missing or wrong compared
                 with the instructions.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. A new unique string for this action (e.g. a UUID; letters,
                 digits, _ . : - only, up to 128). Send the same key again only to retry
@@ -704,21 +875,27 @@ class SyncTools:
         *,
         job_id: str,
         confirm: Literal[True],
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
+        only_quality_band: Literal['good'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Approves every Pending submission on the job and pays the workers; this cannot
-        be undone. Requires confirm=true and an idempotency_key. Set kind to "ai_task"
-        for AI data-collection tasks; the default "job" covers regular and prefilled
-        jobs.
+        be undone. For a survey, only_quality_band "good" approves only the Pending
+        responses in the good quality band and leaves the rest for review. Requires
+        confirm=true and an idempotency_key. Set kind to "survey" for surveys made with
+        create_survey or "ai_task" for AI data-collection tasks; the default "job"
+        covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             confirm: Must be true, and only after the user explicitly approved this
                 action and its cost.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
+            only_quality_band: Surveys only: "good" approves only the Pending
+                responses in the good quality band; the ones to check or likely bad stay
+                Pending for review.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. A new unique string for this action (e.g. a UUID; letters,
                 digits, _ . : - only, up to 128). Send the same key again only to retry
@@ -732,6 +909,7 @@ class SyncTools:
                 "job_id": job_id,
                 "confirm": confirm,
                 "kind": kind,
+                "only_quality_band": only_quality_band,
                 "idempotency_key": idempotency_key,
             },
         )
@@ -741,11 +919,11 @@ class SyncTools:
         *,
         worker_id: int,
     ) -> dict[str, Any]:
-        """Blocks a worker (worker_id from list_submissions of a regular job) from all of
-        the account's jobs and rejects their pending submissions.
+        """Blocks a worker (worker_id from list_submissions of a regular job or a survey)
+        from all of the account's jobs and rejects their pending submissions.
 
         Args:
-            worker_id: worker_id of a submission on a regular job (from
+            worker_id: worker_id of a submission on a regular job or a survey (from
                 list_submissions).
         """
         return self._call_tool(
@@ -797,17 +975,22 @@ class AsyncTools:
     async def get_platform_info(
         self,
         *,
-        section: Literal['all', 'limits', 'categories', 'prefilled_job_types', 'ai_task_types', 'countries'] | None = None,
+        section: Literal['all', 'limits', 'categories', 'prefilled_job_types', 'ai_task_types', 'survey_builder', 'countries'] | None = None,
     ) -> dict[str, Any]:
-        """Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least
-        10 workers per job, $20 minimum deposit, commission and fees), job categories
-        with sub-category codes, the prefilled job types with the link each one expects,
-        AI task types and the allowed ISO country codes. Call it before creating a job.
+        """Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, $0.50
+        per survey response, at least 10 workers per job, $20 minimum deposit,
+        commission and fees), job categories with sub-category codes, the prefilled job
+        types with the link each one expects, AI task types, the survey builder options
+        (question types, scale presets, attention check templates, limits and audience
+        codes) and the allowed ISO country codes. Call it before creating a job or
+        survey.
 
         Args:
             section: Return only one part: limits (pay, quantity, deposit, fees),
-                categories (with sub-category codes), prefilled_job_types, ai_task_types
-                or countries. Default all.
+                categories (with sub-category codes), prefilled_job_types,
+                ai_task_types, survey_builder (question types, scale presets, attention
+                check templates, survey limits and audience codes) or countries. Default
+                all.
         """
         return await self._call_tool(
             "get_platform_info",
@@ -854,22 +1037,24 @@ class AsyncTools:
         *,
         pay_rate: float,
         quantity: int,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         pin: bool | None = None,
     ) -> dict[str, Any]:
-        """Calculates the exact charge for a job or AI task before creating it: pay rate x
-        quantity + commission (+ $10 if pinned), whether the balance covers it, and a
-        quote_id valid for 10 minutes. Every create tool requires this quote_id, so call
-        this first and show the total to the user. Rules: pay_rate >= 0.05 (>= 0.10 for
-        kind "ai_task"), quantity >= 10.
+        """Calculates the exact charge for a job, survey or AI task before creating it: pay
+        rate x quantity + commission (+ $10 if a regular job is pinned), whether the
+        balance covers it, and a quote_id valid for 10 minutes. Every create tool
+        requires this quote_id, so call this first with the kind you will create ("job",
+        "survey" or "ai_task") and show the total to the user. Rules: pay_rate >= 0.05
+        (>= 0.10 for kind "ai_task", >= 0.50 for kind "survey"), quantity >= 10 (at most
+        20,000 for AI tasks and surveys), pin only for kind "job".
 
         Args:
             pay_rate: USD paid to each worker, at most 2 decimals. At least 0.05
-                (0.10 for AI tasks).
+                (0.10 for AI tasks, 0.50 for surveys).
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+                and surveys at most 20,000.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             pin: Regular jobs only: pin the job to the top of the job list for $10.
                 Default false.
         """
@@ -924,9 +1109,9 @@ class AsyncTools:
             sub_category: Sub-category code from get_platform_info within that
                 category, e.g. "2301".
             pay_rate: USD paid to each worker, at most 2 decimals. At least 0.05
-                (0.10 for AI tasks).
+                (0.10 for AI tasks, 0.50 for surveys).
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
+                and surveys at most 20,000.
             length_in_minutes: Honest estimate of the minutes one worker needs to
                 finish the task.
             quote_id: quote_id from preview_job_cost for exactly this kind, pay
@@ -1015,7 +1200,7 @@ class AsyncTools:
             link: Full URL of the post, profile or page, on the platform the type is
                 for.
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
+                and surveys at most 20,000.
             quote_id: quote_id from preview_job_cost for exactly this kind, pay
                 rate, quantity and pin. Valid for 10 minutes.
             confirm: Must be true, and only after the user explicitly approved this
@@ -1068,6 +1253,117 @@ class AsyncTools:
             },
         )
 
+    async def create_survey(
+        self,
+        *,
+        title: str,
+        description: str,
+        questions: Sequence[Mapping[str, Any]],
+        pay_rate: float,
+        quantity: int,
+        countries: Sequence[str],
+        quote_id: str,
+        confirm: Literal[True],
+        length_in_minutes: int | None = None,
+        excluded_countries: Sequence[str] | None = None,
+        audience: Mapping[str, Any] | None = None,
+        block_paste: bool | None = None,
+        image_prompt: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Posts a survey that real workers answer on RapidWorkers, built from your
+        questions (choice, dropdown, rating with stars, agree scales or NPS, matrix,
+        ranking, text, number, date, consent, text blocks and attention checks), and
+        charges pay_rate x quantity + commission. No extra access is needed. Requires
+        quote_id from preview_job_cost with kind "survey", confirm=true and an
+        idempotency_key. pay_rate >= 0.50 per response, quantity 10 to 20,000, countries
+        required. Questions are keyed q_1, q_2, ... by position (text blocks count):
+        show_if may only point at an earlier question. Up to 5 screening questions must
+        come first; screened-out workers are not paid and free their slot. Add 1
+        attention check (2 for surveys over 5 minutes). Every response gets a quality
+        score; failed attention checks, impossible speed and repeat devices are rejected
+        automatically. Optional image_prompt: one image we generate with AI and show
+        workers with the survey intro.
+
+        Args:
+            title: Short title workers see in the survey list (up to 200
+                characters).
+            description: Intro workers read before they start: what the survey is
+                about and anything they should know. Plain text (up to 5,000
+                characters), each paragraph on its own line. Say nothing about which
+                answers screen people out.
+            questions: The survey items in order: 1 to 60, at most 50 that take an
+                answer. Their keys are q_1, q_2, ... by position (text blocks count);
+                show_if refers to them. Example: [{"type":"single_choice","label":"Do
+                you drive a car at least once a week?","options":["Yes","No"],"screener"
+                :true,"disqualify":["No"]},{"type":"rating","label":"How likely are you
+                to recommend your car brand to a
+                friend?","scale":{"preset":"nps"}},{"type":"long_text","label":"What
+                would make you more likely to recommend it?","show_if":[{"question":"q_2
+                ","operator":"lte","value":"6"}]},{"type":"attention_check","template":"
+                select_option"}]
+            pay_rate: USD paid for each completed response, at least 0.50, at most 2
+                decimals. Workers see the effective hourly pay (pay_rate x 60 /
+                minutes).
+            quantity: Number of responses wanted (one per worker), 10 to 20,000.
+            countries: ISO 3166-1 alpha-2 codes of the countries workers must be in,
+                e.g. ["US", "GB"], or ["All"] for every country. get_platform_info lists
+                the allowed codes. Required for surveys.
+            quote_id: quote_id from preview_job_cost for exactly this kind, pay
+                rate, quantity and pin. Valid for 10 minutes.
+            confirm: Must be true, and only after the user explicitly approved this
+                action and its cost.
+            length_in_minutes: Optional: honest minutes one response takes. Leave
+                out for our estimate from the questions (about 8 seconds per closed
+                question, 30 per short text and 60 per long text answer).
+            excluded_countries: Only with countries ["All"] (or omitted): country
+                codes to leave out.
+            audience: Optional: who may answer, on top of countries. Leave out for
+                everyone. Only workers with a completed profile match a filter, so every
+                filter shrinks the pool: set only what the user asked for.
+            block_paste: true stops workers pasting into text answers, so they must
+                type them. Default false; pasted answers are flagged either way.
+            image_prompt: Optional, recommended when a picture would help workers.
+                Describe ONE image we generate with AI (no extra cost) and show workers
+                next to the instructions; it appears a minute or two after creation. We
+                expand your description into a full design brief using the job details,
+                so focus on intent and specifics: what the image is for (e.g. an example
+                of a correct submission), photo or illustration, the exact layout and
+                count (a grid of 2, 3, 4, 6 or 9 works best), what each part shows, and
+                any exact text in quotes (a title, short labels). Example:
+                "Photorealistic 3x3 grid of the same adult from nine angles (front, left
+                45, right 45, left profile, right profile, looking up, looking down,
+                tilt left, tilt right), plain light background, a label under each
+                photo, title "Required face angles"". If you do not know what the image
+                should show (the product, page or expected result), ask the user before
+                creating. Leave out if no image is wanted.
+            idempotency_key: Optional. Created automatically when omitted and reused
+                on retries. A new unique string for this action (e.g. a UUID; letters,
+                digits, _ . : - only, up to 128). Send the same key again only to retry
+                a call that timed out or could not reach the API, so it is never done
+                twice. After an error answer, fix the cause and use a new key: the API
+                replays its stored answer to a reused key.
+        """
+        return await self._call_tool(
+            "create_survey",
+            {
+                "title": title,
+                "description": description,
+                "questions": questions,
+                "pay_rate": pay_rate,
+                "quantity": quantity,
+                "countries": countries,
+                "quote_id": quote_id,
+                "confirm": confirm,
+                "length_in_minutes": length_in_minutes,
+                "excluded_countries": excluded_countries,
+                "audience": audience,
+                "block_paste": block_paste,
+                "image_prompt": image_prompt,
+                "idempotency_key": idempotency_key,
+            },
+        )
+
     async def create_ai_task(
         self,
         *,
@@ -1099,7 +1395,8 @@ class AsyncTools:
         Args:
             task_type: image_collection, video_collection or audio_collection
                 (workers upload files), text_collection (written answers) or
-                custom_data_collection (a form you define in submission_fields).
+                custom_data_collection (a form you define in submission_fields). For a
+                questionnaire use create_survey instead.
             title: Short title workers see in the job list (up to 200 characters).
             description: What the data is for and what to capture, in plain words
                 workers understand.
@@ -1107,7 +1404,7 @@ class AsyncTools:
                 framing, length, quality); used to review the work.
             pay_rate: USD paid to each worker, at least 0.10, at most 2 decimals.
             quantity: Number of workers (one submission each). At least 10; AI tasks
-                at most 20,000.
+                and surveys at most 20,000.
             length_in_minutes: Honest estimate of the minutes one worker needs to
                 finish the task.
             countries: ISO 3166-1 alpha-2 codes of the countries workers must be in,
@@ -1194,19 +1491,20 @@ class AsyncTools:
     async def list_jobs(
         self,
         *,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         status: Literal['Pending', 'Active', 'Completed', 'Canceled', 'Rejected'] | None = None,
         search: str | None = None,
         page: int | None = None,
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """Lists the account's jobs with status (Pending, Active, Completed, Canceled,
-        Rejected), progress and pending submission counts. Set kind to "ai_task" for AI
-        data-collection tasks; the default "job" covers regular and prefilled jobs.
+        Rejected), progress and pending submission counts, newest first. Set kind to
+        "survey" for surveys made with create_survey or "ai_task" for AI data-collection
+        tasks; the default "job" covers regular and prefilled jobs.
 
         Args:
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             status: Only jobs with this status.
             search: Regular jobs only: text to find in the title or description.
             page: Page number, starting at 1.
@@ -1227,17 +1525,19 @@ class AsyncTools:
         self,
         *,
         job_id: str,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
     ) -> dict[str, Any]:
-        """Returns one job or AI task by id with its brief, pay, targeting and progress.
-        Set kind to "ai_task" for AI data-collection tasks; the default "job" covers
-        regular and prefilled jobs.
+        """Returns one job, survey or AI task by id with its brief, pay, targeting and
+        progress; for a survey also its questions (keys q_1, q_2, ... with option ids),
+        audience, response counts and quality bands. Set kind to "survey" for surveys
+        made with create_survey or "ai_task" for AI data-collection tasks; the default
+        "job" covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
         """
         return await self._call_tool(
             "get_job",
@@ -1253,24 +1553,26 @@ class AsyncTools:
         job_id: str,
         additional_quantity: int,
         confirm: Literal[True],
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Adds worker slots to a job and charges pay_rate x additional_quantity +
-        commission. Regular jobs can only be extended once completed. Requires
-        confirm=true and an idempotency_key. Set kind to "ai_task" for AI data-
-        collection tasks; the default "job" covers regular and prefilled jobs.
+        commission. Regular jobs can only be extended once completed; surveys and AI
+        tasks can have at most 20,000 slots in total. Requires confirm=true and an
+        idempotency_key. Set kind to "survey" for surveys made with create_survey or
+        "ai_task" for AI data-collection tasks; the default "job" covers regular and
+        prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             additional_quantity: Worker slots to add; the cost is pay_rate x
-                additional_quantity + commission. AI tasks can have at most 20,000 slots
-                in total.
+                additional_quantity + commission. AI tasks and surveys can have at most
+                20,000 slots in total.
             confirm: Must be true, and only after the user explicitly approved this
                 action and its cost.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. A new unique string for this action (e.g. a UUID; letters,
                 digits, _ . : - only, up to 128). Send the same key again only to retry
@@ -1294,22 +1596,22 @@ class AsyncTools:
         *,
         job_id: str,
         confirm: Literal[True],
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Cancels a job and refunds the unspent budget to the balance. Pending (not yet
         live) jobs are refunded in full; live jobs pay a $0.20 fee and cannot be
         canceled while submissions await review. Requires confirm=true. Set kind to
-        "ai_task" for AI data-collection tasks; the default "job" covers regular and
-        prefilled jobs.
+        "survey" for surveys made with create_survey or "ai_task" for AI data-collection
+        tasks; the default "job" covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             confirm: Must be true, and only after the user explicitly approved this
                 action and its cost.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. Optional. A new unique string for this action (e.g. a UUID;
                 letters, digits, _ . : - only, up to 128). Send the same key again only
@@ -1331,24 +1633,31 @@ class AsyncTools:
         self,
         *,
         job_id: str,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         status: Literal['Pending', 'Approved', 'Rejected'] | None = None,
+        quality_band: Literal['good', 'check', 'likely_bad'] | None = None,
         page: int | None = None,
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """Lists submissions for a job, newest first, filtered by status (Pending,
         Approved, Rejected). Each has the proof text, proof image links and the worker's
-        approval rate. Paginated with page and page_size (max 100). Pending submissions
-        are approved automatically after 2 days if not reviewed. Set kind to "ai_task"
+        approval rate. For kind "survey" each response has its answers (question key,
+        label and the answer as text), a quality score (0-100), a quality band (good,
+        check, likely_bad) with the flags behind it, and whether it was rejected
+        automatically; quality_band filters by band. Paginated with page and page_size
+        (max 100). Pending submissions are approved automatically after 2 days if not
+        reviewed. Set kind to "survey" for surveys made with create_survey or "ai_task"
         for AI data-collection tasks; the default "job" covers regular and prefilled
         jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             status: Only submissions with this status, e.g. "Pending" to review.
+            quality_band: Surveys only: only responses in this quality band, e.g.
+                "likely_bad" to check the weakest first.
             page: Page number, starting at 1.
             page_size: Items per page, 1 to 100 (default 25).
         """
@@ -1358,8 +1667,44 @@ class AsyncTools:
                 "job_id": job_id,
                 "kind": kind,
                 "status": status,
+                "quality_band": quality_band,
                 "page": page,
                 "page_size": page_size,
+            },
+        )
+
+    async def get_survey_results(
+        self,
+        *,
+        job_id: str,
+        include: Literal['valid', 'approved', 'all'] | None = None,
+        text_samples: int | None = None,
+    ) -> dict[str, Any]:
+        """Returns the aggregated results of a survey (job_id from create_survey or
+        list_jobs with kind "survey"): the response funnel (started, screened out,
+        submitted, pending, approved, rejected), median time and effective hourly pay,
+        quality bands, and per question the answer counts and percentages, means and
+        medians, the NPS score, rankings, number ranges and the latest text answers.
+        include "valid" (default: pending and approved responses), "approved" or "all"
+        (adds rejected); screened-out workers never count. For each response in full use
+        list_submissions with kind "survey".
+
+        Args:
+            job_id: Id of the survey (job_id from create_survey, or list_jobs with
+                kind "survey").
+            include: Which responses count: "valid" (default) pending and approved
+                ones, "approved" only approved ones, "all" also the rejected ones.
+                Screened-out workers never count.
+            text_samples: Latest written answers to show per text question and
+                "Other" box (0 to 50, default 10), each cut to 500 characters.
+                list_submissions has every answer in full.
+        """
+        return await self._call_tool(
+            "get_survey_results",
+            {
+                "job_id": job_id,
+                "include": include,
+                "text_samples": text_samples,
             },
         )
 
@@ -1368,22 +1713,23 @@ class AsyncTools:
         *,
         job_id: str,
         submission_id: int,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         tip: float | None = None,
         notes: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Approves a submission and pays the worker from the job budget; this cannot be
         undone. Optional tip $0.01 to $50.00 from the balance, paid to the worker in
-        full. Requires an idempotency_key. Set kind to "ai_task" for AI data-collection
-        tasks; the default "job" covers regular and prefilled jobs.
+        full. Requires an idempotency_key. Set kind to "survey" for surveys made with
+        create_survey or "ai_task" for AI data-collection tasks; the default "job"
+        covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             submission_id: submission_id from list_submissions.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             tip: Optional tip in USD (0.01 to 50.00) paid from the balance to the
                 worker in full.
             notes: Optional note the worker sees.
@@ -1412,23 +1758,24 @@ class AsyncTools:
         job_id: str,
         submission_id: int,
         reason: str,
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Rejects a Pending submission; the worker is not paid and sees the reason. Never
         reject an Approved submission: it has already been paid, and rejecting it does
         not take the payment back. reason is required and should say exactly what was
-        missing. Requires an idempotency_key. Set kind to "ai_task" for AI data-
-        collection tasks; the default "job" covers regular and prefilled jobs.
+        missing. Requires an idempotency_key. Set kind to "survey" for surveys made with
+        create_survey or "ai_task" for AI data-collection tasks; the default "job"
+        covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             submission_id: submission_id from list_submissions.
             reason: Shown to the worker: exactly what was missing or wrong compared
                 with the instructions.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. A new unique string for this action (e.g. a UUID; letters,
                 digits, _ . : - only, up to 128). Send the same key again only to retry
@@ -1452,21 +1799,27 @@ class AsyncTools:
         *,
         job_id: str,
         confirm: Literal[True],
-        kind: Literal['job', 'ai_task'] | None = None,
+        kind: Literal['job', 'ai_task', 'survey'] | None = None,
+        only_quality_band: Literal['good'] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Approves every Pending submission on the job and pays the workers; this cannot
-        be undone. Requires confirm=true and an idempotency_key. Set kind to "ai_task"
-        for AI data-collection tasks; the default "job" covers regular and prefilled
-        jobs.
+        be undone. For a survey, only_quality_band "good" approves only the Pending
+        responses in the good quality band and leaves the rest for review. Requires
+        confirm=true and an idempotency_key. Set kind to "survey" for surveys made with
+        create_survey or "ai_task" for AI data-collection tasks; the default "job"
+        covers regular and prefilled jobs.
 
         Args:
-            job_id: Id of the job or AI task (job_id from list_jobs or from the
-                create tool).
+            job_id: Id of the job, survey or AI task (job_id from list_jobs or from
+                the create tool).
             confirm: Must be true, and only after the user explicitly approved this
                 action and its cost.
-            kind: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-                data-collection tasks.
+            kind: "job" (default) for regular and prefilled jobs, "survey" for
+                surveys made with create_survey, "ai_task" for AI data-collection tasks.
+            only_quality_band: Surveys only: "good" approves only the Pending
+                responses in the good quality band; the ones to check or likely bad stay
+                Pending for review.
             idempotency_key: Optional. Created automatically when omitted and reused
                 on retries. A new unique string for this action (e.g. a UUID; letters,
                 digits, _ . : - only, up to 128). Send the same key again only to retry
@@ -1480,6 +1833,7 @@ class AsyncTools:
                 "job_id": job_id,
                 "confirm": confirm,
                 "kind": kind,
+                "only_quality_band": only_quality_band,
                 "idempotency_key": idempotency_key,
             },
         )
@@ -1489,11 +1843,11 @@ class AsyncTools:
         *,
         worker_id: int,
     ) -> dict[str, Any]:
-        """Blocks a worker (worker_id from list_submissions of a regular job) from all of
-        the account's jobs and rejects their pending submissions.
+        """Blocks a worker (worker_id from list_submissions of a regular job or a survey)
+        from all of the account's jobs and rejects their pending submissions.
 
         Args:
-            worker_id: worker_id of a submission on a regular job (from
+            worker_id: worker_id of a submission on a regular job or a survey (from
                 list_submissions).
         """
         return await self._call_tool(

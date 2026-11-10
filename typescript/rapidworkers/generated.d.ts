@@ -19,6 +19,7 @@ export type ToolName =
     | "preview_job_cost"
     | "create_job"
     | "create_prefilled_job"
+    | "create_survey"
     | "create_ai_task"
     | "request_ai_task_access"
     | "list_jobs"
@@ -26,6 +27,7 @@ export type ToolName =
     | "extend_job"
     | "cancel_job"
     | "list_submissions"
+    | "get_survey_results"
     | "approve_submission"
     | "reject_submission"
     | "approve_all_pending"
@@ -39,9 +41,11 @@ export type ToolName =
 export interface GetPlatformInfoParams {
     /**
      * Return only one part: limits (pay, quantity, deposit, fees), categories (with sub-
-     * category codes), prefilled_job_types, ai_task_types or countries. Default all.
+     * category codes), prefilled_job_types, ai_task_types, survey_builder (question types,
+     * scale presets, attention check templates, survey limits and audience codes) or countries.
+     * Default all.
      */
-    section?: "all" | "limits" | "categories" | "prefilled_job_types" | "ai_task_types" | "countries";
+    section?: "all" | "limits" | "categories" | "prefilled_job_types" | "ai_task_types" | "survey_builder" | "countries";
 }
 
 /**
@@ -64,17 +68,20 @@ export interface GetDepositLinkParams {
  */
 export interface PreviewJobCostParams {
     /**
-     * USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks).
+     * USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks, 0.50 for
+     * surveys).
      */
     pay_rate: number;
     /**
-     * Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+     * Number of workers (one submission each). At least 10; AI tasks and surveys at most
+     * 20,000.
      */
     quantity: number;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Regular jobs only: pin the job to the top of the job list for $10. Default false.
      */
@@ -109,11 +116,13 @@ export interface CreateJobParams {
      */
     sub_category: string;
     /**
-     * USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks).
+     * USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks, 0.50 for
+     * surveys).
      */
     pay_rate: number;
     /**
-     * Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+     * Number of workers (one submission each). At least 10; AI tasks and surveys at most
+     * 20,000.
      */
     quantity: number;
     /**
@@ -186,7 +195,8 @@ export interface CreatePrefilledJobParams {
      */
     link: string;
     /**
-     * Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+     * Number of workers (one submission each). At least 10; AI tasks and surveys at most
+     * 20,000.
      */
     quantity: number;
     /**
@@ -242,13 +252,183 @@ export interface CreatePrefilledJobParams {
 }
 
 /**
+ * Arguments of create_survey.
+ */
+export interface CreateSurveyParams {
+    /**
+     * Short title workers see in the survey list (up to 200 characters).
+     */
+    title: string;
+    /**
+     * Intro workers read before they start: what the survey is about and anything they should
+     * know. Plain text (up to 5,000 characters), each paragraph on its own line. Say nothing
+     * about which answers screen people out.
+     */
+    description: string;
+    /**
+     * The survey items in order: 1 to 60, at most 50 that take an answer. Their keys are q_1,
+     * q_2, ... by position (text blocks count); show_if refers to them. Example:
+     * [{"type":"single_choice","label":"Do you drive a car at least once a week?","options":["Y
+     * es","No"],"screener":true,"disqualify":["No"]},{"type":"rating","label":"How likely are
+     * you to recommend your car brand to a
+     * friend?","scale":{"preset":"nps"}},{"type":"long_text","label":"What would make you more
+     * likely to recommend it?","show_if":[{"question":"q_2","operator":"lte","value":"6"}]},{"t
+     * ype":"attention_check","template":"select_option"}]
+     */
+    questions: ReadonlyArray<{
+        /** single_choice (pick one), multiple_choice (pick several), dropdown (pick one from a long list), rating (one scale), matrix (several statements on one scale), ranking (order every option), short_text, long_text, number, date, consent (agree to a statement), statement (a text block, no answer) or attention_check (a platform check with its own wording). */
+        type: "single_choice" | "multiple_choice" | "dropdown" | "rating" | "matrix" | "ranking" | "short_text" | "long_text" | "number" | "date" | "consent" | "statement" | "attention_check";
+        /** The question as workers see it, plain text (up to 500 characters). Required except for attention_check. statement: the heading; consent: what the worker agrees to. */
+        label?: string;
+        /** Optional note under the question (up to 1,000 characters); for a statement, its body text. */
+        help_text?: string;
+        /** Whether an answer is needed (default true). Screening questions and attention checks are always required. */
+        required?: boolean;
+        /** single_choice and multiple_choice: 2 to 20 choices; dropdown: 2 to 100; ranking: 2 to 10 items to put in order. Unique texts up to 200 characters. Leave "Other" and "None of the above" out: use allow_other and none_option. */
+        options?: ReadonlyArray<string>;
+        /** single_choice and multiple_choice: add "Other (please specify)" with a write-in box. */
+        allow_other?: boolean;
+        /** multiple_choice: text of an exclusive choice that clears the others, e.g. "None of the above". */
+        none_option?: string;
+        /** single_choice, multiple_choice and ranking: shuffle the options for each worker (Other and None stay last), against order bias in unordered lists. */
+        randomize_options?: boolean;
+        /** multiple_choice: fewest choices a worker must tick. */
+        min_choices?: number;
+        /** multiple_choice: most choices a worker may tick. */
+        max_choices?: number;
+        /** rating and matrix: the answer scale. Default stars_5 for rating, agree_5 for matrix. */
+        scale?: {
+            /** stars_5 (1-5 stars), agree_5 (1 strongly disagree to 5 strongly agree), agree_7 (1-7), nps (0-10, rating only) or custom (set min, max and the end labels). */
+            preset?: "stars_5" | "agree_5" | "agree_7" | "nps" | "custom";
+            /** custom only: the first point, 0 or 1. */
+            min?: number;
+            /** custom only: the last point; 2 to 11 points in all (a matrix 2 to 7). */
+            max?: number;
+            /** custom only: text at the low end, e.g. "Not at all". */
+            min_label?: string;
+            /** custom only: text at the high end, e.g. "Very much". */
+            max_label?: string;
+        };
+        /** matrix: 2 to 10 statements, each rated on the shared scale. */
+        rows?: ReadonlyArray<string>;
+        /** short_text and long_text: fewest characters. */
+        min_length?: number;
+        /** short_text (up to 500, default 500) and long_text (up to 10,000, default 2,000): most characters. */
+        max_length?: number;
+        /** number: smallest allowed answer. */
+        min?: number;
+        /** number: largest allowed answer. */
+        max?: number;
+        /** number: whole numbers only. */
+        integer?: boolean;
+        /** Show this item only when every condition holds (up to 3). Not on screening questions or attention checks. Hidden questions are skipped and never required. */
+        show_if?: ReadonlyArray<{
+            /** Key of an EARLIER single_choice, multiple_choice, dropdown, rating, number, text, date or consent question, e.g. "q_2". */
+            question: string;
+            /** single_choice and dropdown: is, is_not; multiple_choice: includes, excludes; rating and number: eq, gte, lte; any of them: answered, not_answered. */
+            operator: "is" | "is_not" | "answered" | "not_answered" | "includes" | "excludes" | "eq" | "gte" | "lte";
+            /** is, is_not, includes, excludes: the exact option text (or "other", or the none_option text). eq, gte, lte: a number written as text, e.g. "7". Leave out for answered and not_answered. */
+            value?: string;
+        }>;
+        /** Screening question (single_choice, multiple_choice or dropdown; up to 5, all before any other question). A worker who picks a disqualify answer leaves the survey unpaid, without a rejection, and the slot reopens. */
+        screener?: boolean;
+        /** Screening questions only: the exact option texts that screen a worker out (at least one option must let them continue). Never shown to workers. */
+        disqualify?: ReadonlyArray<string>;
+        /** Start a new page at this item. A page break always follows the screening questions. */
+        page_break_before?: boolean;
+        /** attention_check only: select_option (pick the named colour), agree_scale (pick the named agreement level) or nonsense_statement (disagree with an absurd statement). The platform writes the wording and the right answer for each worker. */
+        template?: "select_option" | "agree_scale" | "nonsense_statement";
+    }>;
+    /**
+     * USD paid for each completed response, at least 0.50, at most 2 decimals. Workers see the
+     * effective hourly pay (pay_rate x 60 / minutes).
+     */
+    pay_rate: number;
+    /**
+     * Number of responses wanted (one per worker), 10 to 20,000.
+     */
+    quantity: number;
+    /**
+     * ISO 3166-1 alpha-2 codes of the countries workers must be in, e.g. ["US", "GB"], or
+     * ["All"] for every country. get_platform_info lists the allowed codes. Required for
+     * surveys.
+     */
+    countries: ReadonlyArray<string>;
+    /**
+     * quote_id from preview_job_cost for exactly this kind, pay rate, quantity and pin. Valid
+     * for 10 minutes.
+     */
+    quote_id: string;
+    /**
+     * Must be true, and only after the user explicitly approved this action and its cost.
+     */
+    confirm: true;
+    /**
+     * Optional: honest minutes one response takes. Leave out for our estimate from the
+     * questions (about 8 seconds per closed question, 30 per short text and 60 per long text
+     * answer).
+     */
+    length_in_minutes?: number;
+    /**
+     * Only with countries ["All"] (or omitted): country codes to leave out.
+     */
+    excluded_countries?: ReadonlyArray<string>;
+    /**
+     * Optional: who may answer, on top of countries. Leave out for everyone. Only workers with
+     * a completed profile match a filter, so every filter shrinks the pool: set only what the
+     * user asked for.
+     */
+    audience?: {
+        /** Youngest age (16 to 99). */
+        min_age?: number;
+        /** Oldest age (16 to 99). */
+        max_age?: number;
+        /** Only workers whose profile gender is one of these. */
+        genders?: ReadonlyArray<"male" | "female">;
+        /** Only workers with one of these native languages: codes such as "en", "es" or "hi" (get_platform_info section survey_builder lists them). */
+        native_languages?: ReadonlyArray<string>;
+        /** Only workers whose profile highest education is one of these. */
+        education?: ReadonlyArray<"none" | "primary" | "secondary" | "vocational" | "some_university" | "associate" | "bachelor" | "master" | "doctorate" | "professional">;
+        /** Only workers whose profile occupation is one of these. */
+        occupations?: ReadonlyArray<"student" | "unemployed" | "homemaker" | "retired" | "freelancer" | "technology" | "healthcare" | "education" | "finance" | "legal" | "engineering" | "sales" | "hospitality" | "transport" | "construction" | "agriculture" | "government" | "media" | "science" | "other">;
+    };
+    /**
+     * true stops workers pasting into text answers, so they must type them. Default false;
+     * pasted answers are flagged either way.
+     */
+    block_paste?: boolean;
+    /**
+     * Optional, recommended when a picture would help workers. Describe ONE image we generate
+     * with AI (no extra cost) and show workers next to the instructions; it appears a minute or
+     * two after creation. We expand your description into a full design brief using the job
+     * details, so focus on intent and specifics: what the image is for (e.g. an example of a
+     * correct submission), photo or illustration, the exact layout and count (a grid of 2, 3,
+     * 4, 6 or 9 works best), what each part shows, and any exact text in quotes (a title, short
+     * labels). Example: "Photorealistic 3x3 grid of the same adult from nine angles (front,
+     * left 45, right 45, left profile, right profile, looking up, looking down, tilt left, tilt
+     * right), plain light background, a label under each photo, title "Required face angles"".
+     * If you do not know what the image should show (the product, page or expected result), ask
+     * the user before creating. Leave out if no image is wanted.
+     */
+    image_prompt?: string;
+    /**
+     * Optional: created automatically when omitted and reused on retries. A new unique string
+     * for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same
+     * key again only to retry a call that timed out or could not reach the API, so it is never
+     * done twice. After an error answer, fix the cause and use a new key: the API replays its
+     * stored answer to a reused key.
+     */
+    idempotency_key?: string;
+}
+
+/**
  * Arguments of create_ai_task.
  */
 export interface CreateAiTaskParams {
     /**
      * image_collection, video_collection or audio_collection (workers upload files),
      * text_collection (written answers) or custom_data_collection (a form you define in
-     * submission_fields).
+     * submission_fields). For a questionnaire use create_survey instead.
      */
     task_type: "image_collection" | "video_collection" | "audio_collection" | "text_collection" | "custom_data_collection";
     /**
@@ -269,7 +449,8 @@ export interface CreateAiTaskParams {
      */
     pay_rate: number;
     /**
-     * Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+     * Number of workers (one submission each). At least 10; AI tasks and surveys at most
+     * 20,000.
      */
     quantity: number;
     /**
@@ -372,9 +553,10 @@ export interface RequestAiTaskAccessParams {
  */
 export interface ListJobsParams {
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Only jobs with this status.
      */
@@ -398,13 +580,14 @@ export interface ListJobsParams {
  */
 export interface GetJobParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
 }
 
 /**
@@ -412,12 +595,12 @@ export interface GetJobParams {
  */
 export interface ExtendJobParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
      * Worker slots to add; the cost is pay_rate x additional_quantity + commission. AI tasks
-     * can have at most 20,000 slots in total.
+     * and surveys can have at most 20,000 slots in total.
      */
     additional_quantity: number;
     /**
@@ -425,9 +608,10 @@ export interface ExtendJobParams {
      */
     confirm: true;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Optional: created automatically when omitted and reused on retries. A new unique string
      * for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same
@@ -443,7 +627,7 @@ export interface ExtendJobParams {
  */
 export interface CancelJobParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
@@ -451,9 +635,10 @@ export interface CancelJobParams {
      */
     confirm: true;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Optional: created automatically when omitted and reused on retries. Optional. A new
      * unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128).
@@ -469,17 +654,23 @@ export interface CancelJobParams {
  */
 export interface ListSubmissionsParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Only submissions with this status, e.g. "Pending" to review.
      */
     status?: "Pending" | "Approved" | "Rejected";
+    /**
+     * Surveys only: only responses in this quality band, e.g. "likely_bad" to check the weakest
+     * first.
+     */
+    quality_band?: "good" | "check" | "likely_bad";
     /**
      * Page number, starting at 1.
      */
@@ -491,11 +682,31 @@ export interface ListSubmissionsParams {
 }
 
 /**
+ * Arguments of get_survey_results.
+ */
+export interface GetSurveyResultsParams {
+    /**
+     * Id of the survey (job_id from create_survey, or list_jobs with kind "survey").
+     */
+    job_id: string;
+    /**
+     * Which responses count: "valid" (default) pending and approved ones, "approved" only
+     * approved ones, "all" also the rejected ones. Screened-out workers never count.
+     */
+    include?: "valid" | "approved" | "all";
+    /**
+     * Latest written answers to show per text question and "Other" box (0 to 50, default 10),
+     * each cut to 500 characters. list_submissions has every answer in full.
+     */
+    text_samples?: number;
+}
+
+/**
  * Arguments of approve_submission.
  */
 export interface ApproveSubmissionParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
@@ -503,9 +714,10 @@ export interface ApproveSubmissionParams {
      */
     submission_id: number;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Optional tip in USD (0.01 to 50.00) paid from the balance to the worker in full.
      */
@@ -529,7 +741,7 @@ export interface ApproveSubmissionParams {
  */
 export interface RejectSubmissionParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
@@ -541,9 +753,10 @@ export interface RejectSubmissionParams {
      */
     reason: string;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
     /**
      * Optional: created automatically when omitted and reused on retries. A new unique string
      * for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same
@@ -559,7 +772,7 @@ export interface RejectSubmissionParams {
  */
 export interface ApproveAllPendingParams {
     /**
-     * Id of the job or AI task (job_id from list_jobs or from the create tool).
+     * Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
      */
     job_id: string;
     /**
@@ -567,9 +780,15 @@ export interface ApproveAllPendingParams {
      */
     confirm: true;
     /**
-     * "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+     * "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+     * create_survey, "ai_task" for AI data-collection tasks.
      */
-    kind?: "job" | "ai_task";
+    kind?: "job" | "ai_task" | "survey";
+    /**
+     * Surveys only: "good" approves only the Pending responses in the good quality band; the
+     * ones to check or likely bad stay Pending for review.
+     */
+    only_quality_band?: "good";
     /**
      * Optional: created automatically when omitted and reused on retries. A new unique string
      * for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same
@@ -585,7 +804,7 @@ export interface ApproveAllPendingParams {
  */
 export interface BlockWorkerParams {
     /**
-     * worker_id of a submission on a regular job (from list_submissions).
+     * worker_id of a submission on a regular job or a survey (from list_submissions).
      */
     worker_id: number;
 }
@@ -608,10 +827,12 @@ export interface ToolMethods {
      */
     getAccount(): Promise<Record<string, any>>;
     /**
-     * Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least 10
-     * workers per job, $20 minimum deposit, commission and fees), job categories with sub-
-     * category codes, the prefilled job types with the link each one expects, AI task types and
-     * the allowed ISO country codes. Call it before creating a job.
+     * Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, $0.50 per survey
+     * response, at least 10 workers per job, $20 minimum deposit, commission and fees), job
+     * categories with sub-category codes, the prefilled job types with the link each one
+     * expects, AI task types, the survey builder options (question types, scale presets,
+     * attention check templates, limits and audience codes) and the allowed ISO country codes.
+     * Call it before creating a job or survey.
      */
     getPlatformInfo(params?: GetPlatformInfoParams): Promise<Record<string, any>>;
     /**
@@ -626,10 +847,13 @@ export interface ToolMethods {
      */
     getDepositLink(params: GetDepositLinkParams): Promise<Record<string, any>>;
     /**
-     * Calculates the exact charge for a job or AI task before creating it: pay rate x quantity
-     * + commission (+ $10 if pinned), whether the balance covers it, and a quote_id valid for
-     * 10 minutes. Every create tool requires this quote_id, so call this first and show the
-     * total to the user. Rules: pay_rate >= 0.05 (>= 0.10 for kind "ai_task"), quantity >= 10.
+     * Calculates the exact charge for a job, survey or AI task before creating it: pay rate x
+     * quantity + commission (+ $10 if a regular job is pinned), whether the balance covers it,
+     * and a quote_id valid for 10 minutes. Every create tool requires this quote_id, so call
+     * this first with the kind you will create ("job", "survey" or "ai_task") and show the
+     * total to the user. Rules: pay_rate >= 0.05 (>= 0.10 for kind "ai_task", >= 0.50 for kind
+     * "survey"), quantity >= 10 (at most 20,000 for AI tasks and surveys), pin only for kind
+     * "job".
      */
     previewJobCost(params: PreviewJobCostParams): Promise<Record<string, any>>;
     /**
@@ -653,6 +877,20 @@ export interface ToolMethods {
      */
     createPrefilledJob(params: CreatePrefilledJobParams): Promise<Record<string, any>>;
     /**
+     * Posts a survey that real workers answer on RapidWorkers, built from your questions
+     * (choice, dropdown, rating with stars, agree scales or NPS, matrix, ranking, text, number,
+     * date, consent, text blocks and attention checks), and charges pay_rate x quantity +
+     * commission. No extra access is needed. Requires quote_id from preview_job_cost with kind
+     * "survey", confirm=true and an idempotency_key. pay_rate >= 0.50 per response, quantity 10
+     * to 20,000, countries required. Questions are keyed q_1, q_2, ... by position (text blocks
+     * count): show_if may only point at an earlier question. Up to 5 screening questions must
+     * come first; screened-out workers are not paid and free their slot. Add 1 attention check
+     * (2 for surveys over 5 minutes). Every response gets a quality score; failed attention
+     * checks, impossible speed and repeat devices are rejected automatically. Optional
+     * image_prompt: one image we generate with AI and show workers with the survey intro.
+     */
+    createSurvey(params: CreateSurveyParams): Promise<Record<string, any>>;
+    /**
      * Posts an AI data-collection task (image, video, audio or text collection, or a custom
      * form) and charges pay_rate x quantity + commission. Requires approved AI task access (see
      * request_ai_task_access), quote_id from preview_job_cost with kind "ai_task", confirm=true
@@ -668,62 +906,83 @@ export interface ToolMethods {
     requestAiTaskAccess(params?: RequestAiTaskAccessParams): Promise<Record<string, any>>;
     /**
      * Lists the account's jobs with status (Pending, Active, Completed, Canceled, Rejected),
-     * progress and pending submission counts. Set kind to "ai_task" for AI data-collection
-     * tasks; the default "job" covers regular and prefilled jobs.
+     * progress and pending submission counts, newest first. Set kind to "survey" for surveys
+     * made with create_survey or "ai_task" for AI data-collection tasks; the default "job"
+     * covers regular and prefilled jobs.
      */
     listJobs(params?: ListJobsParams): Promise<Record<string, any>>;
     /**
-     * Returns one job or AI task by id with its brief, pay, targeting and progress. Set kind to
+     * Returns one job, survey or AI task by id with its brief, pay, targeting and progress; for
+     * a survey also its questions (keys q_1, q_2, ... with option ids), audience, response
+     * counts and quality bands. Set kind to "survey" for surveys made with create_survey or
      * "ai_task" for AI data-collection tasks; the default "job" covers regular and prefilled
      * jobs.
      */
     getJob(params: GetJobParams): Promise<Record<string, any>>;
     /**
      * Adds worker slots to a job and charges pay_rate x additional_quantity + commission.
-     * Regular jobs can only be extended once completed. Requires confirm=true and an
-     * idempotency_key. Set kind to "ai_task" for AI data-collection tasks; the default "job"
-     * covers regular and prefilled jobs.
+     * Regular jobs can only be extended once completed; surveys and AI tasks can have at most
+     * 20,000 slots in total. Requires confirm=true and an idempotency_key. Set kind to "survey"
+     * for surveys made with create_survey or "ai_task" for AI data-collection tasks; the
+     * default "job" covers regular and prefilled jobs.
      */
     extendJob(params: ExtendJobParams): Promise<Record<string, any>>;
     /**
      * Cancels a job and refunds the unspent budget to the balance. Pending (not yet live) jobs
      * are refunded in full; live jobs pay a $0.20 fee and cannot be canceled while submissions
-     * await review. Requires confirm=true. Set kind to "ai_task" for AI data-collection tasks;
-     * the default "job" covers regular and prefilled jobs.
+     * await review. Requires confirm=true. Set kind to "survey" for surveys made with
+     * create_survey or "ai_task" for AI data-collection tasks; the default "job" covers regular
+     * and prefilled jobs.
      */
     cancelJob(params: CancelJobParams): Promise<Record<string, any>>;
     /**
      * Lists submissions for a job, newest first, filtered by status (Pending, Approved,
-     * Rejected). Each has the proof text, proof image links and the worker's approval rate.
-     * Paginated with page and page_size (max 100). Pending submissions are approved
-     * automatically after 2 days if not reviewed. Set kind to "ai_task" for AI data-collection
-     * tasks; the default "job" covers regular and prefilled jobs.
+     * Rejected). Each has the proof text, proof image links and the worker's approval rate. For
+     * kind "survey" each response has its answers (question key, label and the answer as text),
+     * a quality score (0-100), a quality band (good, check, likely_bad) with the flags behind
+     * it, and whether it was rejected automatically; quality_band filters by band. Paginated
+     * with page and page_size (max 100). Pending submissions are approved automatically after 2
+     * days if not reviewed. Set kind to "survey" for surveys made with create_survey or
+     * "ai_task" for AI data-collection tasks; the default "job" covers regular and prefilled
+     * jobs.
      */
     listSubmissions(params: ListSubmissionsParams): Promise<Record<string, any>>;
     /**
+     * Returns the aggregated results of a survey (job_id from create_survey or list_jobs with
+     * kind "survey"): the response funnel (started, screened out, submitted, pending, approved,
+     * rejected), median time and effective hourly pay, quality bands, and per question the
+     * answer counts and percentages, means and medians, the NPS score, rankings, number ranges
+     * and the latest text answers. include "valid" (default: pending and approved responses),
+     * "approved" or "all" (adds rejected); screened-out workers never count. For each response
+     * in full use list_submissions with kind "survey".
+     */
+    getSurveyResults(params: GetSurveyResultsParams): Promise<Record<string, any>>;
+    /**
      * Approves a submission and pays the worker from the job budget; this cannot be undone.
      * Optional tip $0.01 to $50.00 from the balance, paid to the worker in full. Requires an
-     * idempotency_key. Set kind to "ai_task" for AI data-collection tasks; the default "job"
-     * covers regular and prefilled jobs.
+     * idempotency_key. Set kind to "survey" for surveys made with create_survey or "ai_task"
+     * for AI data-collection tasks; the default "job" covers regular and prefilled jobs.
      */
     approveSubmission(params: ApproveSubmissionParams): Promise<Record<string, any>>;
     /**
      * Rejects a Pending submission; the worker is not paid and sees the reason. Never reject an
      * Approved submission: it has already been paid, and rejecting it does not take the payment
      * back. reason is required and should say exactly what was missing. Requires an
-     * idempotency_key. Set kind to "ai_task" for AI data-collection tasks; the default "job"
-     * covers regular and prefilled jobs.
+     * idempotency_key. Set kind to "survey" for surveys made with create_survey or "ai_task"
+     * for AI data-collection tasks; the default "job" covers regular and prefilled jobs.
      */
     rejectSubmission(params: RejectSubmissionParams): Promise<Record<string, any>>;
     /**
      * Approves every Pending submission on the job and pays the workers; this cannot be undone.
-     * Requires confirm=true and an idempotency_key. Set kind to "ai_task" for AI data-
-     * collection tasks; the default "job" covers regular and prefilled jobs.
+     * For a survey, only_quality_band "good" approves only the Pending responses in the good
+     * quality band and leaves the rest for review. Requires confirm=true and an
+     * idempotency_key. Set kind to "survey" for surveys made with create_survey or "ai_task"
+     * for AI data-collection tasks; the default "job" covers regular and prefilled jobs.
      */
     approveAllPending(params: ApproveAllPendingParams): Promise<Record<string, any>>;
     /**
-     * Blocks a worker (worker_id from list_submissions of a regular job) from all of the
-     * account's jobs and rejects their pending submissions.
+     * Blocks a worker (worker_id from list_submissions of a regular job or a survey) from all
+     * of the account's jobs and rejects their pending submissions.
      */
     blockWorker(params: BlockWorkerParams): Promise<Record<string, any>>;
     /**

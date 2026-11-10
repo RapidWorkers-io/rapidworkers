@@ -110,7 +110,7 @@ def test_stdio_without_key_lists_tools_and_explains_calls():
     assert set(answers) == {1, 2, 3}
     assert answers[1]["result"]["serverInfo"]["name"] == "rapidworkers"
     assert answers[1]["result"]["protocolVersion"] == "2025-06-18"
-    assert len(answers[2]["result"]["tools"]) == len(SPEC["tools"]) == 20
+    assert len(answers[2]["result"]["tools"]) == len(SPEC["tools"]) == 22
     assert answers[3]["result"]["isError"] is True
     assert "RAPIDWORKERS_API_KEY" in answers[3]["result"]["content"][0]["text"]
     assert "not set" in done.stderr

@@ -162,6 +162,41 @@ mod tools {
     }
 
     #[tokio::test]
+    async fn create_survey_sends_its_arguments() -> Result<()> {
+        let mock = common::Mock::start().await;
+        mock.answer(common::reply(common::structured(json!({ "ok": true }))))
+            .await;
+        let client = mock.client();
+        let params = CreateSurveyParams::new(
+            "sample",
+            "sample",
+            [CreateSurveyQuestion::new(CreateSurveyQuestionType::SingleChoice)],
+            0.5,
+            10,
+            ["sample"],
+            "sample",
+            true,
+        );
+        let answer = client.create_survey(params).await?;
+        assert_eq!(answer, json!({ "ok": true }));
+        let mut arguments = mock.tool_arguments("create_survey").await;
+        let key = arguments.remove("idempotency_key").unwrap_or_default();
+        assert!(key.as_str().unwrap_or_default().starts_with("sdk-"));
+        let expected = json!({
+            "title": "sample",
+            "description": "sample",
+            "questions": [{"type": "single_choice"}],
+            "pay_rate": 0.5,
+            "quantity": 10,
+            "countries": ["sample"],
+            "quote_id": "sample",
+            "confirm": true
+        });
+        assert_eq!(Value::Object(arguments), expected);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn create_ai_task_sends_its_arguments() -> Result<()> {
         let mock = common::Mock::start().await;
         mock.answer(common::reply(common::structured(json!({ "ok": true }))))
@@ -308,6 +343,24 @@ mod tools {
     }
 
     #[tokio::test]
+    async fn get_survey_results_sends_its_arguments() -> Result<()> {
+        let mock = common::Mock::start().await;
+        mock.answer(common::reply(common::structured(json!({ "ok": true }))))
+            .await;
+        let client = mock.client();
+        let params = GetSurveyResultsParams::new("sample");
+        let answer = client.get_survey_results(params).await?;
+        assert_eq!(answer, json!({ "ok": true }));
+        let mut arguments = mock.tool_arguments("get_survey_results").await;
+        assert!(arguments.remove("idempotency_key").is_none());
+        let expected = json!({
+            "job_id": "sample"
+        });
+        assert_eq!(Value::Object(arguments), expected);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn approve_submission_sends_its_arguments() -> Result<()> {
         let mock = common::Mock::start().await;
         mock.answer(common::reply(common::structured(json!({ "ok": true }))))
@@ -430,6 +483,8 @@ mod tools {
         assert_eq!(json!(PlatformInfoSection::PrefilledJobTypes), json!("prefilled_job_types"));
         assert_eq!(PlatformInfoSection::AiTaskTypes.as_str(), "ai_task_types");
         assert_eq!(json!(PlatformInfoSection::AiTaskTypes), json!("ai_task_types"));
+        assert_eq!(PlatformInfoSection::SurveyBuilder.as_str(), "survey_builder");
+        assert_eq!(json!(PlatformInfoSection::SurveyBuilder), json!("survey_builder"));
         assert_eq!(PlatformInfoSection::Countries.as_str(), "countries");
         assert_eq!(json!(PlatformInfoSection::Countries), json!("countries"));
         assert_eq!(DepositMethod::Card.as_str(), "card");
@@ -440,6 +495,8 @@ mod tools {
         assert_eq!(json!(JobKind::Job), json!("job"));
         assert_eq!(JobKind::AiTask.as_str(), "ai_task");
         assert_eq!(json!(JobKind::AiTask), json!("ai_task"));
+        assert_eq!(JobKind::Survey.as_str(), "survey");
+        assert_eq!(json!(JobKind::Survey), json!("survey"));
         assert_eq!(PrefilledJobType::FacebookLikes.as_str(), "facebook_likes");
         assert_eq!(json!(PrefilledJobType::FacebookLikes), json!("facebook_likes"));
         assert_eq!(PrefilledJobType::FacebookShares.as_str(), "facebook_shares");
@@ -458,6 +515,130 @@ mod tools {
         assert_eq!(json!(PrefilledJobType::NinegagUpvotes), json!("ninegag_upvotes"));
         assert_eq!(PrefilledJobType::YoutubeLikes.as_str(), "youtube_likes");
         assert_eq!(json!(PrefilledJobType::YoutubeLikes), json!("youtube_likes"));
+        assert_eq!(CreateSurveyQuestionType::SingleChoice.as_str(), "single_choice");
+        assert_eq!(json!(CreateSurveyQuestionType::SingleChoice), json!("single_choice"));
+        assert_eq!(CreateSurveyQuestionType::MultipleChoice.as_str(), "multiple_choice");
+        assert_eq!(json!(CreateSurveyQuestionType::MultipleChoice), json!("multiple_choice"));
+        assert_eq!(CreateSurveyQuestionType::Dropdown.as_str(), "dropdown");
+        assert_eq!(json!(CreateSurveyQuestionType::Dropdown), json!("dropdown"));
+        assert_eq!(CreateSurveyQuestionType::Rating.as_str(), "rating");
+        assert_eq!(json!(CreateSurveyQuestionType::Rating), json!("rating"));
+        assert_eq!(CreateSurveyQuestionType::Matrix.as_str(), "matrix");
+        assert_eq!(json!(CreateSurveyQuestionType::Matrix), json!("matrix"));
+        assert_eq!(CreateSurveyQuestionType::Ranking.as_str(), "ranking");
+        assert_eq!(json!(CreateSurveyQuestionType::Ranking), json!("ranking"));
+        assert_eq!(CreateSurveyQuestionType::ShortText.as_str(), "short_text");
+        assert_eq!(json!(CreateSurveyQuestionType::ShortText), json!("short_text"));
+        assert_eq!(CreateSurveyQuestionType::LongText.as_str(), "long_text");
+        assert_eq!(json!(CreateSurveyQuestionType::LongText), json!("long_text"));
+        assert_eq!(CreateSurveyQuestionType::Number.as_str(), "number");
+        assert_eq!(json!(CreateSurveyQuestionType::Number), json!("number"));
+        assert_eq!(CreateSurveyQuestionType::Date.as_str(), "date");
+        assert_eq!(json!(CreateSurveyQuestionType::Date), json!("date"));
+        assert_eq!(CreateSurveyQuestionType::Consent.as_str(), "consent");
+        assert_eq!(json!(CreateSurveyQuestionType::Consent), json!("consent"));
+        assert_eq!(CreateSurveyQuestionType::Statement.as_str(), "statement");
+        assert_eq!(json!(CreateSurveyQuestionType::Statement), json!("statement"));
+        assert_eq!(CreateSurveyQuestionType::AttentionCheck.as_str(), "attention_check");
+        assert_eq!(json!(CreateSurveyQuestionType::AttentionCheck), json!("attention_check"));
+        assert_eq!(Preset::Stars5.as_str(), "stars_5");
+        assert_eq!(json!(Preset::Stars5), json!("stars_5"));
+        assert_eq!(Preset::Agree5.as_str(), "agree_5");
+        assert_eq!(json!(Preset::Agree5), json!("agree_5"));
+        assert_eq!(Preset::Agree7.as_str(), "agree_7");
+        assert_eq!(json!(Preset::Agree7), json!("agree_7"));
+        assert_eq!(Preset::Nps.as_str(), "nps");
+        assert_eq!(json!(Preset::Nps), json!("nps"));
+        assert_eq!(Preset::Custom.as_str(), "custom");
+        assert_eq!(json!(Preset::Custom), json!("custom"));
+        assert_eq!(Operator::Is.as_str(), "is");
+        assert_eq!(json!(Operator::Is), json!("is"));
+        assert_eq!(Operator::IsNot.as_str(), "is_not");
+        assert_eq!(json!(Operator::IsNot), json!("is_not"));
+        assert_eq!(Operator::Answered.as_str(), "answered");
+        assert_eq!(json!(Operator::Answered), json!("answered"));
+        assert_eq!(Operator::NotAnswered.as_str(), "not_answered");
+        assert_eq!(json!(Operator::NotAnswered), json!("not_answered"));
+        assert_eq!(Operator::Includes.as_str(), "includes");
+        assert_eq!(json!(Operator::Includes), json!("includes"));
+        assert_eq!(Operator::Excludes.as_str(), "excludes");
+        assert_eq!(json!(Operator::Excludes), json!("excludes"));
+        assert_eq!(Operator::Eq.as_str(), "eq");
+        assert_eq!(json!(Operator::Eq), json!("eq"));
+        assert_eq!(Operator::Gte.as_str(), "gte");
+        assert_eq!(json!(Operator::Gte), json!("gte"));
+        assert_eq!(Operator::Lte.as_str(), "lte");
+        assert_eq!(json!(Operator::Lte), json!("lte"));
+        assert_eq!(Template::SelectOption.as_str(), "select_option");
+        assert_eq!(json!(Template::SelectOption), json!("select_option"));
+        assert_eq!(Template::AgreeScale.as_str(), "agree_scale");
+        assert_eq!(json!(Template::AgreeScale), json!("agree_scale"));
+        assert_eq!(Template::NonsenseStatement.as_str(), "nonsense_statement");
+        assert_eq!(json!(Template::NonsenseStatement), json!("nonsense_statement"));
+        assert_eq!(Genders::Male.as_str(), "male");
+        assert_eq!(json!(Genders::Male), json!("male"));
+        assert_eq!(Genders::Female.as_str(), "female");
+        assert_eq!(json!(Genders::Female), json!("female"));
+        assert_eq!(Education::None.as_str(), "none");
+        assert_eq!(json!(Education::None), json!("none"));
+        assert_eq!(Education::Primary.as_str(), "primary");
+        assert_eq!(json!(Education::Primary), json!("primary"));
+        assert_eq!(Education::Secondary.as_str(), "secondary");
+        assert_eq!(json!(Education::Secondary), json!("secondary"));
+        assert_eq!(Education::Vocational.as_str(), "vocational");
+        assert_eq!(json!(Education::Vocational), json!("vocational"));
+        assert_eq!(Education::SomeUniversity.as_str(), "some_university");
+        assert_eq!(json!(Education::SomeUniversity), json!("some_university"));
+        assert_eq!(Education::Associate.as_str(), "associate");
+        assert_eq!(json!(Education::Associate), json!("associate"));
+        assert_eq!(Education::Bachelor.as_str(), "bachelor");
+        assert_eq!(json!(Education::Bachelor), json!("bachelor"));
+        assert_eq!(Education::Master.as_str(), "master");
+        assert_eq!(json!(Education::Master), json!("master"));
+        assert_eq!(Education::Doctorate.as_str(), "doctorate");
+        assert_eq!(json!(Education::Doctorate), json!("doctorate"));
+        assert_eq!(Education::Professional.as_str(), "professional");
+        assert_eq!(json!(Education::Professional), json!("professional"));
+        assert_eq!(Occupations::Student.as_str(), "student");
+        assert_eq!(json!(Occupations::Student), json!("student"));
+        assert_eq!(Occupations::Unemployed.as_str(), "unemployed");
+        assert_eq!(json!(Occupations::Unemployed), json!("unemployed"));
+        assert_eq!(Occupations::Homemaker.as_str(), "homemaker");
+        assert_eq!(json!(Occupations::Homemaker), json!("homemaker"));
+        assert_eq!(Occupations::Retired.as_str(), "retired");
+        assert_eq!(json!(Occupations::Retired), json!("retired"));
+        assert_eq!(Occupations::Freelancer.as_str(), "freelancer");
+        assert_eq!(json!(Occupations::Freelancer), json!("freelancer"));
+        assert_eq!(Occupations::Technology.as_str(), "technology");
+        assert_eq!(json!(Occupations::Technology), json!("technology"));
+        assert_eq!(Occupations::Healthcare.as_str(), "healthcare");
+        assert_eq!(json!(Occupations::Healthcare), json!("healthcare"));
+        assert_eq!(Occupations::Education.as_str(), "education");
+        assert_eq!(json!(Occupations::Education), json!("education"));
+        assert_eq!(Occupations::Finance.as_str(), "finance");
+        assert_eq!(json!(Occupations::Finance), json!("finance"));
+        assert_eq!(Occupations::Legal.as_str(), "legal");
+        assert_eq!(json!(Occupations::Legal), json!("legal"));
+        assert_eq!(Occupations::Engineering.as_str(), "engineering");
+        assert_eq!(json!(Occupations::Engineering), json!("engineering"));
+        assert_eq!(Occupations::Sales.as_str(), "sales");
+        assert_eq!(json!(Occupations::Sales), json!("sales"));
+        assert_eq!(Occupations::Hospitality.as_str(), "hospitality");
+        assert_eq!(json!(Occupations::Hospitality), json!("hospitality"));
+        assert_eq!(Occupations::Transport.as_str(), "transport");
+        assert_eq!(json!(Occupations::Transport), json!("transport"));
+        assert_eq!(Occupations::Construction.as_str(), "construction");
+        assert_eq!(json!(Occupations::Construction), json!("construction"));
+        assert_eq!(Occupations::Agriculture.as_str(), "agriculture");
+        assert_eq!(json!(Occupations::Agriculture), json!("agriculture"));
+        assert_eq!(Occupations::Government.as_str(), "government");
+        assert_eq!(json!(Occupations::Government), json!("government"));
+        assert_eq!(Occupations::Media.as_str(), "media");
+        assert_eq!(json!(Occupations::Media), json!("media"));
+        assert_eq!(Occupations::Science.as_str(), "science");
+        assert_eq!(json!(Occupations::Science), json!("science"));
+        assert_eq!(Occupations::Other.as_str(), "other");
+        assert_eq!(json!(Occupations::Other), json!("other"));
         assert_eq!(AiTaskType::ImageCollection.as_str(), "image_collection");
         assert_eq!(json!(AiTaskType::ImageCollection), json!("image_collection"));
         assert_eq!(AiTaskType::VideoCollection.as_str(), "video_collection");
@@ -506,5 +687,19 @@ mod tools {
         assert_eq!(json!(SubmissionStatus::Approved), json!("Approved"));
         assert_eq!(SubmissionStatus::Rejected.as_str(), "Rejected");
         assert_eq!(json!(SubmissionStatus::Rejected), json!("Rejected"));
+        assert_eq!(QualityBand::Good.as_str(), "good");
+        assert_eq!(json!(QualityBand::Good), json!("good"));
+        assert_eq!(QualityBand::Check.as_str(), "check");
+        assert_eq!(json!(QualityBand::Check), json!("check"));
+        assert_eq!(QualityBand::LikelyBad.as_str(), "likely_bad");
+        assert_eq!(json!(QualityBand::LikelyBad), json!("likely_bad"));
+        assert_eq!(Include::Valid.as_str(), "valid");
+        assert_eq!(json!(Include::Valid), json!("valid"));
+        assert_eq!(Include::Approved.as_str(), "approved");
+        assert_eq!(json!(Include::Approved), json!("approved"));
+        assert_eq!(Include::All.as_str(), "all");
+        assert_eq!(json!(Include::All), json!("all"));
+        assert_eq!(OnlyQualityBand::Good.as_str(), "good");
+        assert_eq!(json!(OnlyQualityBand::Good), json!("good"));
     }
 }

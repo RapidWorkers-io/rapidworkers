@@ -17,6 +17,7 @@ var toolTable = []toolInfo{
 	{name: "preview_job_cost", readOnly: true, idempotencyKey: false, retry: true},
 	{name: "create_job", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "create_prefilled_job", readOnly: false, idempotencyKey: true, retry: true},
+	{name: "create_survey", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "create_ai_task", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "request_ai_task_access", readOnly: false, idempotencyKey: false, retry: true},
 	{name: "list_jobs", readOnly: true, idempotencyKey: false, retry: true},
@@ -24,6 +25,7 @@ var toolTable = []toolInfo{
 	{name: "extend_job", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "cancel_job", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "list_submissions", readOnly: true, idempotencyKey: false, retry: true},
+	{name: "get_survey_results", readOnly: true, idempotencyKey: false, retry: true},
 	{name: "approve_submission", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "reject_submission", readOnly: false, idempotencyKey: true, retry: true},
 	{name: "approve_all_pending", readOnly: false, idempotencyKey: true, retry: true},
@@ -36,7 +38,8 @@ var toolTable = []toolInfo{
 //
 // image_collection, video_collection or audio_collection (workers upload
 // files), text_collection (written answers) or custom_data_collection (a form
-// you define in submission_fields).
+// you define in submission_fields). For a questionnaire use create_survey
+// instead.
 type AITaskType string
 
 // Values of AITaskType.
@@ -61,6 +64,32 @@ const (
 	CaptureModeRecord CaptureMode = "record"
 )
 
+// CreateSurveyType is a value of the "type" field of [Question].
+//
+// single_choice (pick one), multiple_choice (pick several), dropdown (pick one
+// from a long list), rating (one scale), matrix (several statements on one
+// scale), ranking (order every option), short_text, long_text, number, date,
+// consent (agree to a statement), statement (a text block, no answer) or
+// attention_check (a platform check with its own wording).
+type CreateSurveyType string
+
+// Values of CreateSurveyType.
+const (
+	CreateSurveyTypeSingleChoice   CreateSurveyType = "single_choice"
+	CreateSurveyTypeMultipleChoice CreateSurveyType = "multiple_choice"
+	CreateSurveyTypeDropdown       CreateSurveyType = "dropdown"
+	CreateSurveyTypeRating         CreateSurveyType = "rating"
+	CreateSurveyTypeMatrix         CreateSurveyType = "matrix"
+	CreateSurveyTypeRanking        CreateSurveyType = "ranking"
+	CreateSurveyTypeShortText      CreateSurveyType = "short_text"
+	CreateSurveyTypeLongText       CreateSurveyType = "long_text"
+	CreateSurveyTypeNumber         CreateSurveyType = "number"
+	CreateSurveyTypeDate           CreateSurveyType = "date"
+	CreateSurveyTypeConsent        CreateSurveyType = "consent"
+	CreateSurveyTypeStatement      CreateSurveyType = "statement"
+	CreateSurveyTypeAttentionCheck CreateSurveyType = "attention_check"
+)
+
 // DepositMethod is a value of the "method" argument.
 //
 // "card" (Stripe checkout; a 4% processing fee is deducted from the credited
@@ -71,6 +100,50 @@ type DepositMethod string
 const (
 	DepositMethodCard   DepositMethod = "card"
 	DepositMethodCrypto DepositMethod = "crypto"
+)
+
+// Education is a value of the "education" field of [Audience].
+//
+// Only workers whose profile highest education is one of these.
+type Education string
+
+// Values of Education.
+const (
+	EducationNone           Education = "none"
+	EducationPrimary        Education = "primary"
+	EducationSecondary      Education = "secondary"
+	EducationVocational     Education = "vocational"
+	EducationSomeUniversity Education = "some_university"
+	EducationAssociate      Education = "associate"
+	EducationBachelor       Education = "bachelor"
+	EducationMaster         Education = "master"
+	EducationDoctorate      Education = "doctorate"
+	EducationProfessional   Education = "professional"
+)
+
+// Genders is a value of the "genders" field of [Audience].
+//
+// Only workers whose profile gender is one of these.
+type Genders string
+
+// Values of Genders.
+const (
+	GendersMale   Genders = "male"
+	GendersFemale Genders = "female"
+)
+
+// Include is a value of the "include" argument.
+//
+// Which responses count: "valid" (default) pending and approved ones,
+// "approved" only approved ones, "all" also the rejected ones. Screened-out
+// workers never count.
+type Include string
+
+// Values of Include.
+const (
+	IncludeValid    Include = "valid"
+	IncludeApproved Include = "approved"
+	IncludeAll      Include = "all"
 )
 
 // JobStatus is a value of the "status" argument.
@@ -89,21 +162,82 @@ const (
 
 // Kind is a value of the "kind" argument.
 //
-// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-// data-collection tasks.
+// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+// with create_survey, "ai_task" for AI data-collection tasks.
 type Kind string
 
 // Values of Kind.
 const (
 	KindJob    Kind = "job"
 	KindAITask Kind = "ai_task"
+	KindSurvey Kind = "survey"
+)
+
+// Occupations is a value of the "occupations" field of [Audience].
+//
+// Only workers whose profile occupation is one of these.
+type Occupations string
+
+// Values of Occupations.
+const (
+	OccupationsStudent      Occupations = "student"
+	OccupationsUnemployed   Occupations = "unemployed"
+	OccupationsHomemaker    Occupations = "homemaker"
+	OccupationsRetired      Occupations = "retired"
+	OccupationsFreelancer   Occupations = "freelancer"
+	OccupationsTechnology   Occupations = "technology"
+	OccupationsHealthcare   Occupations = "healthcare"
+	OccupationsEducation    Occupations = "education"
+	OccupationsFinance      Occupations = "finance"
+	OccupationsLegal        Occupations = "legal"
+	OccupationsEngineering  Occupations = "engineering"
+	OccupationsSales        Occupations = "sales"
+	OccupationsHospitality  Occupations = "hospitality"
+	OccupationsTransport    Occupations = "transport"
+	OccupationsConstruction Occupations = "construction"
+	OccupationsAgriculture  Occupations = "agriculture"
+	OccupationsGovernment   Occupations = "government"
+	OccupationsMedia        Occupations = "media"
+	OccupationsScience      Occupations = "science"
+	OccupationsOther        Occupations = "other"
+)
+
+// OnlyQualityBand is a value of the "only_quality_band" argument.
+//
+// Surveys only: "good" approves only the Pending responses in the good quality
+// band; the ones to check or likely bad stay Pending for review.
+type OnlyQualityBand string
+
+// Values of OnlyQualityBand.
+const (
+	OnlyQualityBandGood OnlyQualityBand = "good"
+)
+
+// Operator is a value of the "operator" field of [ShowIf].
+//
+// single_choice and dropdown: is, is_not; multiple_choice: includes, excludes;
+// rating and number: eq, gte, lte; any of them: answered, not_answered.
+type Operator string
+
+// Values of Operator.
+const (
+	OperatorIs          Operator = "is"
+	OperatorIsNot       Operator = "is_not"
+	OperatorAnswered    Operator = "answered"
+	OperatorNotAnswered Operator = "not_answered"
+	OperatorIncludes    Operator = "includes"
+	OperatorExcludes    Operator = "excludes"
+	OperatorEq          Operator = "eq"
+	OperatorGte         Operator = "gte"
+	OperatorLte         Operator = "lte"
 )
 
 // PlatformInfoSection is a value of the "section" argument.
 //
 // Return only one part: limits (pay, quantity, deposit, fees), categories (with
-// sub-category codes), prefilled_job_types, ai_task_types or countries. Default
-// all.
+// sub-category codes), prefilled_job_types, ai_task_types, survey_builder
+// (question types, scale presets, attention check templates, survey limits and
+// audience codes) or countries. Default all.
 type PlatformInfoSection string
 
 // Values of PlatformInfoSection.
@@ -113,6 +247,7 @@ const (
 	PlatformInfoSectionCategories        PlatformInfoSection = "categories"
 	PlatformInfoSectionPrefilledJobTypes PlatformInfoSection = "prefilled_job_types"
 	PlatformInfoSectionAITaskTypes       PlatformInfoSection = "ai_task_types"
+	PlatformInfoSectionSurveyBuilder     PlatformInfoSection = "survey_builder"
 	PlatformInfoSectionCountries         PlatformInfoSection = "countries"
 )
 
@@ -133,6 +268,35 @@ const (
 	PrefilledJobTypeTwitterRetweets    PrefilledJobType = "twitter_retweets"
 	PrefilledJobTypeNinegagUpvotes     PrefilledJobType = "ninegag_upvotes"
 	PrefilledJobTypeYoutubeLikes       PrefilledJobType = "youtube_likes"
+)
+
+// Preset is a value of the "preset" field of [Scale].
+//
+// stars_5 (1-5 stars), agree_5 (1 strongly disagree to 5 strongly agree),
+// agree_7 (1-7), nps (0-10, rating only) or custom (set min, max and the end
+// labels).
+type Preset string
+
+// Values of Preset.
+const (
+	PresetStars5 Preset = "stars_5"
+	PresetAgree5 Preset = "agree_5"
+	PresetAgree7 Preset = "agree_7"
+	PresetNps    Preset = "nps"
+	PresetCustom Preset = "custom"
+)
+
+// QualityBand is a value of the "quality_band" argument.
+//
+// Surveys only: only responses in this quality band, e.g. "likely_bad" to check
+// the weakest first.
+type QualityBand string
+
+// Values of QualityBand.
+const (
+	QualityBandGood      QualityBand = "good"
+	QualityBandCheck     QualityBand = "check"
+	QualityBandLikelyBad QualityBand = "likely_bad"
 )
 
 // SubmissionFieldType is a value of the "type" field of [SubmissionField].
@@ -163,6 +327,180 @@ const (
 	SubmissionStatusApproved SubmissionStatus = "Approved"
 	SubmissionStatusRejected SubmissionStatus = "Rejected"
 )
+
+// Template is a value of the "template" field of [Question].
+//
+// attention_check only: select_option (pick the named colour), agree_scale
+// (pick the named agreement level) or nonsense_statement (disagree with an
+// absurd statement). The platform writes the wording and the right answer for
+// each worker.
+type Template string
+
+// Values of Template.
+const (
+	TemplateSelectOption      Template = "select_option"
+	TemplateAgreeScale        Template = "agree_scale"
+	TemplateNonsenseStatement Template = "nonsense_statement"
+)
+
+// Audience is one element of the "audience" argument.
+//
+// Optional: who may answer, on top of countries. Leave out for everyone. Only
+// workers with a completed profile match a filter, so every filter shrinks the
+// pool: set only what the user asked for.
+type Audience struct {
+	// Youngest age (16 to 99).
+	MinAge *int `json:"min_age,omitempty"`
+
+	// Oldest age (16 to 99).
+	MaxAge *int `json:"max_age,omitempty"`
+
+	// Only workers whose profile gender is one of these.
+	Genders []Genders `json:"genders,omitempty"`
+
+	// Only workers with one of these native languages: codes such as "en", "es" or
+	// "hi" (get_platform_info section survey_builder lists them).
+	NativeLanguages []string `json:"native_languages,omitempty"`
+
+	// Only workers whose profile highest education is one of these.
+	Education []Education `json:"education,omitempty"`
+
+	// Only workers whose profile occupation is one of these.
+	Occupations []Occupations `json:"occupations,omitempty"`
+}
+
+// Question is one element of the "questions" argument.
+type Question struct {
+	// Required. single_choice (pick one), multiple_choice (pick several), dropdown
+	// (pick one from a long list), rating (one scale), matrix (several statements
+	// on one scale), ranking (order every option), short_text, long_text, number,
+	// date, consent (agree to a statement), statement (a text block, no answer) or
+	// attention_check (a platform check with its own wording).
+	Type CreateSurveyType `json:"type"`
+
+	// The question as workers see it, plain text (up to 500 characters). Required
+	// except for attention_check. statement: the heading; consent: what the worker
+	// agrees to.
+	Label *string `json:"label,omitempty"`
+
+	// Optional note under the question (up to 1,000 characters); for a statement,
+	// its body text.
+	HelpText *string `json:"help_text,omitempty"`
+
+	// Whether an answer is needed (default true). Screening questions and
+	// attention checks are always required.
+	Required *bool `json:"required,omitempty"`
+
+	// single_choice and multiple_choice: 2 to 20 choices; dropdown: 2 to 100;
+	// ranking: 2 to 10 items to put in order. Unique texts up to 200 characters.
+	// Leave "Other" and "None of the above" out: use allow_other and none_option.
+	Options []string `json:"options,omitempty"`
+
+	// single_choice and multiple_choice: add "Other (please specify)" with a
+	// write-in box.
+	AllowOther *bool `json:"allow_other,omitempty"`
+
+	// multiple_choice: text of an exclusive choice that clears the others, e.g.
+	// "None of the above".
+	NoneOption *string `json:"none_option,omitempty"`
+
+	// single_choice, multiple_choice and ranking: shuffle the options for each
+	// worker (Other and None stay last), against order bias in unordered lists.
+	RandomizeOptions *bool `json:"randomize_options,omitempty"`
+
+	// multiple_choice: fewest choices a worker must tick.
+	MinChoices *int `json:"min_choices,omitempty"`
+
+	// multiple_choice: most choices a worker may tick.
+	MaxChoices *int `json:"max_choices,omitempty"`
+
+	// rating and matrix: the answer scale. Default stars_5 for rating, agree_5 for
+	// matrix.
+	Scale *Scale `json:"scale,omitempty"`
+
+	// matrix: 2 to 10 statements, each rated on the shared scale.
+	Rows []string `json:"rows,omitempty"`
+
+	// short_text and long_text: fewest characters.
+	MinLength *int `json:"min_length,omitempty"`
+
+	// short_text (up to 500, default 500) and long_text (up to 10,000, default
+	// 2,000): most characters.
+	MaxLength *int `json:"max_length,omitempty"`
+
+	// number: smallest allowed answer.
+	Min *float64 `json:"min,omitempty"`
+
+	// number: largest allowed answer.
+	Max *float64 `json:"max,omitempty"`
+
+	// number: whole numbers only.
+	Integer *bool `json:"integer,omitempty"`
+
+	// Show this item only when every condition holds (up to 3). Not on screening
+	// questions or attention checks. Hidden questions are skipped and never
+	// required.
+	ShowIf []ShowIf `json:"show_if,omitempty"`
+
+	// Screening question (single_choice, multiple_choice or dropdown; up to 5, all
+	// before any other question). A worker who picks a disqualify answer leaves
+	// the survey unpaid, without a rejection, and the slot reopens.
+	Screener *bool `json:"screener,omitempty"`
+
+	// Screening questions only: the exact option texts that screen a worker out
+	// (at least one option must let them continue). Never shown to workers.
+	Disqualify []string `json:"disqualify,omitempty"`
+
+	// Start a new page at this item. A page break always follows the screening
+	// questions.
+	PageBreakBefore *bool `json:"page_break_before,omitempty"`
+
+	// attention_check only: select_option (pick the named colour), agree_scale
+	// (pick the named agreement level) or nonsense_statement (disagree with an
+	// absurd statement). The platform writes the wording and the right answer for
+	// each worker.
+	Template Template `json:"template,omitempty"`
+}
+
+// Scale is one element of the "scale" argument.
+//
+// rating and matrix: the answer scale. Default stars_5 for rating, agree_5 for
+// matrix.
+type Scale struct {
+	// stars_5 (1-5 stars), agree_5 (1 strongly disagree to 5 strongly agree),
+	// agree_7 (1-7), nps (0-10, rating only) or custom (set min, max and the end
+	// labels).
+	Preset Preset `json:"preset,omitempty"`
+
+	// custom only: the first point, 0 or 1.
+	Min *int `json:"min,omitempty"`
+
+	// custom only: the last point; 2 to 11 points in all (a matrix 2 to 7).
+	Max *int `json:"max,omitempty"`
+
+	// custom only: text at the low end, e.g. "Not at all".
+	MinLabel *string `json:"min_label,omitempty"`
+
+	// custom only: text at the high end, e.g. "Very much".
+	MaxLabel *string `json:"max_label,omitempty"`
+}
+
+// ShowIf is one element of the "show_if" argument.
+type ShowIf struct {
+	// Required. Key of an EARLIER single_choice, multiple_choice, dropdown,
+	// rating, number, text, date or consent question, e.g. "q_2".
+	Question string `json:"question"`
+
+	// Required. single_choice and dropdown: is, is_not; multiple_choice: includes,
+	// excludes; rating and number: eq, gte, lte; any of them: answered,
+	// not_answered.
+	Operator Operator `json:"operator"`
+
+	// is, is_not, includes, excludes: the exact option text (or "other", or the
+	// none_option text). eq, gte, lte: a number written as text, e.g. "7". Leave
+	// out for answered and not_answered.
+	Value *string `json:"value,omitempty"`
+}
 
 // SubmissionField is one element of the "submission_fields" argument.
 type SubmissionField struct {
@@ -207,16 +545,19 @@ func (c *Client) GetAccount(ctx context.Context) (map[string]any, error) {
 // GetPlatformInfoParams are the arguments of [Client.GetPlatformInfo].
 type GetPlatformInfoParams struct {
 	// Return only one part: limits (pay, quantity, deposit, fees), categories
-	// (with sub-category codes), prefilled_job_types, ai_task_types or countries.
-	// Default all.
+	// (with sub-category codes), prefilled_job_types, ai_task_types,
+	// survey_builder (question types, scale presets, attention check templates,
+	// survey limits and audience codes) or countries. Default all.
 	Section PlatformInfoSection `json:"section,omitempty"`
 }
 
 // GetPlatformInfo returns platform rules (minimum pay $0.05 per task, $0.10 for
-// AI tasks, at least 10 workers per job, $20 minimum deposit, commission and
-// fees), job categories with sub-category codes, the prefilled job types with
-// the link each one expects, AI task types and the allowed ISO country codes.
-// Call it before creating a job.
+// AI tasks, $0.50 per survey response, at least 10 workers per job, $20 minimum
+// deposit, commission and fees), job categories with sub-category codes, the
+// prefilled job types with the link each one expects, AI task types, the survey
+// builder options (question types, scale presets, attention check templates,
+// limits and audience codes) and the allowed ISO country codes. Call it before
+// creating a job or survey.
 //
 // It calls the "get_platform_info" tool.
 func (c *Client) GetPlatformInfo(ctx context.Context, p GetPlatformInfoParams) (map[string]any, error) {
@@ -256,15 +597,15 @@ func (c *Client) GetDepositLink(ctx context.Context, p GetDepositLinkParams) (ma
 // PreviewJobCostParams are the arguments of [Client.PreviewJobCost].
 type PreviewJobCostParams struct {
 	// Required. USD paid to each worker, at most 2 decimals. At least 0.05 (0.10
-	// for AI tasks).
+	// for AI tasks, 0.50 for surveys).
 	PayRate float64 `json:"pay_rate"`
 
-	// Required. Number of workers (one submission each). At least 10; AI tasks at
-	// most 20,000.
+	// Required. Number of workers (one submission each). At least 10; AI tasks and
+	// surveys at most 20,000.
 	Quantity int `json:"quantity"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Regular jobs only: pin the job to the top of the job list for $10. Default
@@ -272,11 +613,14 @@ type PreviewJobCostParams struct {
 	Pin *bool `json:"pin,omitempty"`
 }
 
-// PreviewJobCost calculates the exact charge for a job or AI task before
-// creating it: pay rate x quantity + commission (+ $10 if pinned), whether the
-// balance covers it, and a quote_id valid for 10 minutes. Every create tool
-// requires this quote_id, so call this first and show the total to the user.
-// Rules: pay_rate >= 0.05 (>= 0.10 for kind "ai_task"), quantity >= 10.
+// PreviewJobCost calculates the exact charge for a job, survey or AI task
+// before creating it: pay rate x quantity + commission (+ $10 if a regular job
+// is pinned), whether the balance covers it, and a quote_id valid for 10
+// minutes. Every create tool requires this quote_id, so call this first with
+// the kind you will create ("job", "survey" or "ai_task") and show the total to
+// the user. Rules: pay_rate >= 0.05 (>= 0.10 for kind "ai_task", >= 0.50 for
+// kind "survey"), quantity >= 10 (at most 20,000 for AI tasks and surveys), pin
+// only for kind "job".
 //
 // It calls the "preview_job_cost" tool.
 func (c *Client) PreviewJobCost(ctx context.Context, p PreviewJobCostParams) (map[string]any, error) {
@@ -306,11 +650,11 @@ type CreateJobParams struct {
 	SubCategory string `json:"sub_category"`
 
 	// Required. USD paid to each worker, at most 2 decimals. At least 0.05 (0.10
-	// for AI tasks).
+	// for AI tasks, 0.50 for surveys).
 	PayRate float64 `json:"pay_rate"`
 
-	// Required. Number of workers (one submission each). At least 10; AI tasks at
-	// most 20,000.
+	// Required. Number of workers (one submission each). At least 10; AI tasks and
+	// surveys at most 20,000.
 	Quantity int `json:"quantity"`
 
 	// Required. Honest estimate of the minutes one worker needs to finish the
@@ -395,8 +739,8 @@ type CreatePrefilledJobParams struct {
 	// for.
 	Link string `json:"link"`
 
-	// Required. Number of workers (one submission each). At least 10; AI tasks at
-	// most 20,000.
+	// Required. Number of workers (one submission each). At least 10; AI tasks and
+	// surveys at most 20,000.
 	Quantity int `json:"quantity"`
 
 	// Required. quote_id from preview_job_cost for exactly this kind, pay rate,
@@ -466,11 +810,120 @@ func (c *Client) CreatePrefilledJob(ctx context.Context, p CreatePrefilledJobPar
 	return c.callTool(ctx, "create_prefilled_job", p)
 }
 
+// CreateSurveyParams are the arguments of [Client.CreateSurvey].
+type CreateSurveyParams struct {
+	// Required. Short title workers see in the survey list (up to 200 characters).
+	Title string `json:"title"`
+
+	// Required. Intro workers read before they start: what the survey is about and
+	// anything they should know. Plain text (up to 5,000 characters), each
+	// paragraph on its own line. Say nothing about which answers screen people
+	// out.
+	Description string `json:"description"`
+
+	// Required. The survey items in order: 1 to 60, at most 50 that take an
+	// answer. Their keys are q_1, q_2, ... by position (text blocks count);
+	// show_if refers to them. Example: [{"type":"single_choice","label":"Do you
+	// drive a car at least once a
+	// week?","options":["Yes","No"],"screener":true,"disqualify":["No"]},{"type":"rating","label":"How
+	// likely are you to recommend your car brand to a
+	// friend?","scale":{"preset":"nps"}},{"type":"long_text","label":"What would
+	// make you more likely to recommend
+	// it?","show_if":[{"question":"q_2","operator":"lte","value":"6"}]},{"type":"attention_check","template":"select_option"}]
+	Questions []Question `json:"questions"`
+
+	// Required. USD paid for each completed response, at least 0.50, at most 2
+	// decimals. Workers see the effective hourly pay (pay_rate x 60 / minutes).
+	PayRate float64 `json:"pay_rate"`
+
+	// Required. Number of responses wanted (one per worker), 10 to 20,000.
+	Quantity int `json:"quantity"`
+
+	// Required. ISO 3166-1 alpha-2 codes of the countries workers must be in, e.g.
+	// ["US", "GB"], or ["All"] for every country. get_platform_info lists the
+	// allowed codes. Required for surveys.
+	Countries []string `json:"countries"`
+
+	// Required. quote_id from preview_job_cost for exactly this kind, pay rate,
+	// quantity and pin. Valid for 10 minutes.
+	QuoteID string `json:"quote_id"`
+
+	// Required. Must be true, and only after the user explicitly approved this
+	// action and its cost.
+	Confirm bool `json:"confirm"`
+
+	// Optional: honest minutes one response takes. Leave out for our estimate from
+	// the questions (about 8 seconds per closed question, 30 per short text and 60
+	// per long text answer).
+	LengthInMinutes *int `json:"length_in_minutes,omitempty"`
+
+	// Only with countries ["All"] (or omitted): country codes to leave out.
+	ExcludedCountries []string `json:"excluded_countries,omitempty"`
+
+	// Optional: who may answer, on top of countries. Leave out for everyone. Only
+	// workers with a completed profile match a filter, so every filter shrinks the
+	// pool: set only what the user asked for.
+	Audience *Audience `json:"audience,omitempty"`
+
+	// true stops workers pasting into text answers, so they must type them.
+	// Default false; pasted answers are flagged either way.
+	BlockPaste *bool `json:"block_paste,omitempty"`
+
+	// Optional, recommended when a picture would help workers. Describe ONE image
+	// we generate with AI (no extra cost) and show workers next to the
+	// instructions; it appears a minute or two after creation. We expand your
+	// description into a full design brief using the job details, so focus on
+	// intent and specifics: what the image is for (e.g. an example of a correct
+	// submission), photo or illustration, the exact layout and count (a grid of 2,
+	// 3, 4, 6 or 9 works best), what each part shows, and any exact text in quotes
+	// (a title, short labels). Example: "Photorealistic 3x3 grid of the same adult
+	// from nine angles (front, left 45, right 45, left profile, right profile,
+	// looking up, looking down, tilt left, tilt right), plain light background, a
+	// label under each photo, title "Required face angles"". If you do not know
+	// what the image should show (the product, page or expected result), ask the
+	// user before creating. Leave out if no image is wanted.
+	ImagePrompt *string `json:"image_prompt,omitempty"`
+
+	// Optional. Created automatically when empty and reused on retries. A new
+	// unique string for this action (e.g. a UUID; letters, digits, _ . : - only,
+	// up to 128). Send the same key again only to retry a call that timed out or
+	// could not reach the API, so it is never done twice. After an error answer,
+	// fix the cause and use a new key: the API replays its stored answer to a
+	// reused key.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+}
+
+// CreateSurvey posts a survey that real workers answer on RapidWorkers, built
+// from your questions (choice, dropdown, rating with stars, agree scales or
+// NPS, matrix, ranking, text, number, date, consent, text blocks and attention
+// checks), and charges pay_rate x quantity + commission. No extra access is
+// needed. Requires quote_id from preview_job_cost with kind "survey",
+// confirm=true and an idempotency_key. pay_rate >= 0.50 per response, quantity
+// 10 to 20,000, countries required. Questions are keyed q_1, q_2, ... by
+// position (text blocks count): show_if may only point at an earlier question.
+// Up to 5 screening questions must come first; screened-out workers are not
+// paid and free their slot. Add 1 attention check (2 for surveys over 5
+// minutes). Every response gets a quality score; failed attention checks,
+// impossible speed and repeat devices are rejected automatically. Optional
+// image_prompt: one image we generate with AI and show workers with the survey
+// intro.
+//
+// It calls the "create_survey" tool. An empty p.IdempotencyKey is replaced by a
+// new key, which is reused when the call is retried, so the action never
+// happens twice.
+func (c *Client) CreateSurvey(ctx context.Context, p CreateSurveyParams) (map[string]any, error) {
+	if err := ensureIdempotencyKey(&p.IdempotencyKey); err != nil {
+		return nil, err
+	}
+	return c.callTool(ctx, "create_survey", p)
+}
+
 // CreateAITaskParams are the arguments of [Client.CreateAITask].
 type CreateAITaskParams struct {
 	// Required. image_collection, video_collection or audio_collection (workers
 	// upload files), text_collection (written answers) or custom_data_collection
-	// (a form you define in submission_fields).
+	// (a form you define in submission_fields). For a questionnaire use
+	// create_survey instead.
 	TaskType AITaskType `json:"task_type"`
 
 	// Required. Short title workers see in the job list (up to 200 characters).
@@ -487,8 +940,8 @@ type CreateAITaskParams struct {
 	// Required. USD paid to each worker, at least 0.10, at most 2 decimals.
 	PayRate float64 `json:"pay_rate"`
 
-	// Required. Number of workers (one submission each). At least 10; AI tasks at
-	// most 20,000.
+	// Required. Number of workers (one submission each). At least 10; AI tasks and
+	// surveys at most 20,000.
 	Quantity int `json:"quantity"`
 
 	// Required. Honest estimate of the minutes one worker needs to finish the
@@ -586,8 +1039,8 @@ func (c *Client) RequestAITaskAccess(ctx context.Context, p RequestAITaskAccessP
 
 // ListJobsParams are the arguments of [Client.ListJobs].
 type ListJobsParams struct {
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Only jobs with this status.
@@ -604,9 +1057,9 @@ type ListJobsParams struct {
 }
 
 // ListJobs lists the account's jobs with status (Pending, Active, Completed,
-// Canceled, Rejected), progress and pending submission counts. Set kind to
-// "ai_task" for AI data-collection tasks; the default "job" covers regular and
-// prefilled jobs.
+// Canceled, Rejected), progress and pending submission counts, newest first.
+// Set kind to "survey" for surveys made with create_survey or "ai_task" for AI
+// data-collection tasks; the default "job" covers regular and prefilled jobs.
 //
 // It calls the "list_jobs" tool.
 func (c *Client) ListJobs(ctx context.Context, p ListJobsParams) (map[string]any, error) {
@@ -615,18 +1068,20 @@ func (c *Client) ListJobs(ctx context.Context, p ListJobsParams) (map[string]any
 
 // GetJobParams are the arguments of [Client.GetJob].
 type GetJobParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 }
 
-// GetJob returns one job or AI task by id with its brief, pay, targeting and
-// progress. Set kind to "ai_task" for AI data-collection tasks; the default
-// "job" covers regular and prefilled jobs.
+// GetJob returns one job, survey or AI task by id with its brief, pay,
+// targeting and progress; for a survey also its questions (keys q_1, q_2, ...
+// with option ids), audience, response counts and quality bands. Set kind to
+// "survey" for surveys made with create_survey or "ai_task" for AI
+// data-collection tasks; the default "job" covers regular and prefilled jobs.
 //
 // It calls the "get_job" tool.
 func (c *Client) GetJob(ctx context.Context, p GetJobParams) (map[string]any, error) {
@@ -635,20 +1090,20 @@ func (c *Client) GetJob(ctx context.Context, p GetJobParams) (map[string]any, er
 
 // ExtendJobParams are the arguments of [Client.ExtendJob].
 type ExtendJobParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
 	// Required. Worker slots to add; the cost is pay_rate x additional_quantity +
-	// commission. AI tasks can have at most 20,000 slots in total.
+	// commission. AI tasks and surveys can have at most 20,000 slots in total.
 	AdditionalQuantity int `json:"additional_quantity"`
 
 	// Required. Must be true, and only after the user explicitly approved this
 	// action and its cost.
 	Confirm bool `json:"confirm"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Optional. Created automatically when empty and reused on retries. A new
@@ -662,9 +1117,10 @@ type ExtendJobParams struct {
 
 // ExtendJob adds worker slots to a job and charges pay_rate x
 // additional_quantity + commission. Regular jobs can only be extended once
-// completed. Requires confirm=true and an idempotency_key. Set kind to
-// "ai_task" for AI data-collection tasks; the default "job" covers regular and
-// prefilled jobs.
+// completed; surveys and AI tasks can have at most 20,000 slots in total.
+// Requires confirm=true and an idempotency_key. Set kind to "survey" for
+// surveys made with create_survey or "ai_task" for AI data-collection tasks;
+// the default "job" covers regular and prefilled jobs.
 //
 // It calls the "extend_job" tool. An empty p.IdempotencyKey is replaced by a
 // new key, which is reused when the call is retried, so the action never
@@ -678,16 +1134,16 @@ func (c *Client) ExtendJob(ctx context.Context, p ExtendJobParams) (map[string]a
 
 // CancelJobParams are the arguments of [Client.CancelJob].
 type CancelJobParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
 	// Required. Must be true, and only after the user explicitly approved this
 	// action and its cost.
 	Confirm bool `json:"confirm"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Optional. Created automatically when empty and reused on retries. A new
@@ -702,8 +1158,8 @@ type CancelJobParams struct {
 // CancelJob cancels a job and refunds the unspent budget to the balance.
 // Pending (not yet live) jobs are refunded in full; live jobs pay a $0.20 fee
 // and cannot be canceled while submissions await review. Requires confirm=true.
-// Set kind to "ai_task" for AI data-collection tasks; the default "job" covers
-// regular and prefilled jobs.
+// Set kind to "survey" for surveys made with create_survey or "ai_task" for AI
+// data-collection tasks; the default "job" covers regular and prefilled jobs.
 //
 // It calls the "cancel_job" tool. An empty p.IdempotencyKey is replaced by a
 // new key, which is reused when the call is retried, so the action never
@@ -717,16 +1173,20 @@ func (c *Client) CancelJob(ctx context.Context, p CancelJobParams) (map[string]a
 
 // ListSubmissionsParams are the arguments of [Client.ListSubmissions].
 type ListSubmissionsParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Only submissions with this status, e.g. "Pending" to review.
 	Status SubmissionStatus `json:"status,omitempty"`
+
+	// Surveys only: only responses in this quality band, e.g. "likely_bad" to
+	// check the weakest first.
+	QualityBand QualityBand `json:"quality_band,omitempty"`
 
 	// Page number, starting at 1.
 	Page *int `json:"page,omitempty"`
@@ -737,27 +1197,62 @@ type ListSubmissionsParams struct {
 
 // ListSubmissions lists submissions for a job, newest first, filtered by status
 // (Pending, Approved, Rejected). Each has the proof text, proof image links and
-// the worker's approval rate. Paginated with page and page_size (max 100).
-// Pending submissions are approved automatically after 2 days if not reviewed.
-// Set kind to "ai_task" for AI data-collection tasks; the default "job" covers
-// regular and prefilled jobs.
+// the worker's approval rate. For kind "survey" each response has its answers
+// (question key, label and the answer as text), a quality score (0-100), a
+// quality band (good, check, likely_bad) with the flags behind it, and whether
+// it was rejected automatically; quality_band filters by band. Paginated with
+// page and page_size (max 100). Pending submissions are approved automatically
+// after 2 days if not reviewed. Set kind to "survey" for surveys made with
+// create_survey or "ai_task" for AI data-collection tasks; the default "job"
+// covers regular and prefilled jobs.
 //
 // It calls the "list_submissions" tool.
 func (c *Client) ListSubmissions(ctx context.Context, p ListSubmissionsParams) (map[string]any, error) {
 	return c.callTool(ctx, "list_submissions", p)
 }
 
+// GetSurveyResultsParams are the arguments of [Client.GetSurveyResults].
+type GetSurveyResultsParams struct {
+	// Required. Id of the survey (job_id from create_survey, or list_jobs with
+	// kind "survey").
+	JobID string `json:"job_id"`
+
+	// Which responses count: "valid" (default) pending and approved ones,
+	// "approved" only approved ones, "all" also the rejected ones. Screened-out
+	// workers never count.
+	Include Include `json:"include,omitempty"`
+
+	// Latest written answers to show per text question and "Other" box (0 to 50,
+	// default 10), each cut to 500 characters. list_submissions has every answer
+	// in full.
+	TextSamples *int `json:"text_samples,omitempty"`
+}
+
+// GetSurveyResults returns the aggregated results of a survey (job_id from
+// create_survey or list_jobs with kind "survey"): the response funnel (started,
+// screened out, submitted, pending, approved, rejected), median time and
+// effective hourly pay, quality bands, and per question the answer counts and
+// percentages, means and medians, the NPS score, rankings, number ranges and
+// the latest text answers. include "valid" (default: pending and approved
+// responses), "approved" or "all" (adds rejected); screened-out workers never
+// count. For each response in full use list_submissions with kind "survey".
+//
+// It calls the "get_survey_results" tool.
+func (c *Client) GetSurveyResults(ctx context.Context, p GetSurveyResultsParams) (map[string]any, error) {
+	return c.callTool(ctx, "get_survey_results", p)
+}
+
 // ApproveSubmissionParams are the arguments of [Client.ApproveSubmission].
 type ApproveSubmissionParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
 	// Required. submission_id from list_submissions.
 	SubmissionID int `json:"submission_id"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Optional tip in USD (0.01 to 50.00) paid from the balance to the worker in
@@ -778,9 +1273,9 @@ type ApproveSubmissionParams struct {
 
 // ApproveSubmission approves a submission and pays the worker from the job
 // budget; this cannot be undone. Optional tip $0.01 to $50.00 from the balance,
-// paid to the worker in full. Requires an idempotency_key. Set kind to
-// "ai_task" for AI data-collection tasks; the default "job" covers regular and
-// prefilled jobs.
+// paid to the worker in full. Requires an idempotency_key. Set kind to "survey"
+// for surveys made with create_survey or "ai_task" for AI data-collection
+// tasks; the default "job" covers regular and prefilled jobs.
 //
 // It calls the "approve_submission" tool. An empty p.IdempotencyKey is replaced
 // by a new key, which is reused when the call is retried, so the action never
@@ -794,8 +1289,8 @@ func (c *Client) ApproveSubmission(ctx context.Context, p ApproveSubmissionParam
 
 // RejectSubmissionParams are the arguments of [Client.RejectSubmission].
 type RejectSubmissionParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
 	// Required. submission_id from list_submissions.
@@ -805,8 +1300,8 @@ type RejectSubmissionParams struct {
 	// with the instructions.
 	Reason string `json:"reason"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
 
 	// Optional. Created automatically when empty and reused on retries. A new
@@ -822,8 +1317,8 @@ type RejectSubmissionParams struct {
 // sees the reason. Never reject an Approved submission: it has already been
 // paid, and rejecting it does not take the payment back. reason is required and
 // should say exactly what was missing. Requires an idempotency_key. Set kind to
-// "ai_task" for AI data-collection tasks; the default "job" covers regular and
-// prefilled jobs.
+// "survey" for surveys made with create_survey or "ai_task" for AI
+// data-collection tasks; the default "job" covers regular and prefilled jobs.
 //
 // It calls the "reject_submission" tool. An empty p.IdempotencyKey is replaced
 // by a new key, which is reused when the call is retried, so the action never
@@ -837,17 +1332,21 @@ func (c *Client) RejectSubmission(ctx context.Context, p RejectSubmissionParams)
 
 // ApproveAllPendingParams are the arguments of [Client.ApproveAllPending].
 type ApproveAllPendingParams struct {
-	// Required. Id of the job or AI task (job_id from list_jobs or from the create
-	// tool).
+	// Required. Id of the job, survey or AI task (job_id from list_jobs or from
+	// the create tool).
 	JobID string `json:"job_id"`
 
 	// Required. Must be true, and only after the user explicitly approved this
 	// action and its cost.
 	Confirm bool `json:"confirm"`
 
-	// "job" (default) for regular and prefilled jobs, "ai_task" for AI
-	// data-collection tasks.
+	// "job" (default) for regular and prefilled jobs, "survey" for surveys made
+	// with create_survey, "ai_task" for AI data-collection tasks.
 	Kind Kind `json:"kind,omitempty"`
+
+	// Surveys only: "good" approves only the Pending responses in the good quality
+	// band; the ones to check or likely bad stay Pending for review.
+	OnlyQualityBand OnlyQualityBand `json:"only_quality_band,omitempty"`
 
 	// Optional. Created automatically when empty and reused on retries. A new
 	// unique string for this action (e.g. a UUID; letters, digits, _ . : - only,
@@ -859,9 +1358,11 @@ type ApproveAllPendingParams struct {
 }
 
 // ApproveAllPending approves every Pending submission on the job and pays the
-// workers; this cannot be undone. Requires confirm=true and an idempotency_key.
-// Set kind to "ai_task" for AI data-collection tasks; the default "job" covers
-// regular and prefilled jobs.
+// workers; this cannot be undone. For a survey, only_quality_band "good"
+// approves only the Pending responses in the good quality band and leaves the
+// rest for review. Requires confirm=true and an idempotency_key. Set kind to
+// "survey" for surveys made with create_survey or "ai_task" for AI
+// data-collection tasks; the default "job" covers regular and prefilled jobs.
 //
 // It calls the "approve_all_pending" tool. An empty p.IdempotencyKey is
 // replaced by a new key, which is reused when the call is retried, so the
@@ -875,13 +1376,14 @@ func (c *Client) ApproveAllPending(ctx context.Context, p ApproveAllPendingParam
 
 // BlockWorkerParams are the arguments of [Client.BlockWorker].
 type BlockWorkerParams struct {
-	// Required. worker_id of a submission on a regular job (from
+	// Required. worker_id of a submission on a regular job or a survey (from
 	// list_submissions).
 	WorkerID int `json:"worker_id"`
 }
 
-// BlockWorker blocks a worker (worker_id from list_submissions of a regular
-// job) from all of the account's jobs and rejects their pending submissions.
+// BlockWorker blocks a worker (worker_id from list_submissions of a regular job
+// or a survey) from all of the account's jobs and rejects their pending
+// submissions.
 //
 // It calls the "block_worker" tool.
 func (c *Client) BlockWorker(ctx context.Context, p BlockWorkerParams) (map[string]any, error) {

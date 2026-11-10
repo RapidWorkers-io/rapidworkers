@@ -125,7 +125,7 @@ if errors.As(err, &toolErr) {
 
 ## Rules worth knowing
 
-- At least $0.05 per worker ($0.10 for AI tasks) and at least 10 workers per job.
+- At least $0.05 per worker ($0.10 for AI tasks, $0.50 per survey response) and at least 10 workers per job.
 - A first deposit (minimum $20) is required before posting. `GetDepositLink` returns a checkout URL for a person to pay.
 - Create calls need a `QuoteID` from `PreviewJobCost` and `Confirm: true`.
 - Approving pays the worker and cannot be undone. Pending submissions are approved automatically after 2 days.

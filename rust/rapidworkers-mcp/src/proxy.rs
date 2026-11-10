@@ -727,7 +727,7 @@ mod tests {
     fn bundled_spec_has_every_tool() {
         let spec = spec();
         assert_eq!(spec["server"]["name"], "rapidworkers");
-        assert_eq!(spec["tools"].as_array().unwrap().len(), 20);
+        assert_eq!(spec["tools"].as_array().unwrap().len(), 22);
         assert!(no_key_message().contains(API_KEYS_URL));
     }
 }

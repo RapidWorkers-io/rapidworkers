@@ -66,7 +66,7 @@ See each package's README for full examples.
 
 ## Rules
 
-At least $0.05 per worker ($0.10 for AI tasks), at least 10 workers per job, and a $20 minimum deposit. Creating a job needs a `quote_id` from `preview_job_cost` and `confirm: true`. Approving pays the worker and cannot be undone; pending submissions are approved automatically after 2 days.
+At least $0.05 per worker ($0.10 for AI tasks, $0.50 per survey response), at least 10 workers per job, and a $20 minimum deposit. Creating a job needs a `quote_id` from `preview_job_cost` and `confirm: true`. Approving pays the worker and cannot be undone; pending submissions are approved automatically after 2 days.
 
 ## How this repository works
 

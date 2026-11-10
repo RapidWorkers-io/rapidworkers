@@ -37,7 +37,7 @@
     },
     {
       "name": "get_platform_info",
-      "description": "Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least 10 workers per job, $20 minimum deposit, commission and fees), job categories with sub-category codes, the prefilled jo"
+      "description": "Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, $0.50 per survey response, at least 10 workers per job, $20 minimum deposit, commission and fees), job categories with sub-categ"
     },
     {
       "name": "list_transactions",
@@ -49,7 +49,7 @@
     },
     {
       "name": "preview_job_cost",
-      "description": "Calculates the exact charge for a job or AI task before creating it: pay rate x quantity + commission (+ $10 if pinned), whether the balance covers it, and a quote_id valid for 10 minutes."
+      "description": "Calculates the exact charge for a job, survey or AI task before creating it: pay rate x quantity + commission (+ $10 if a regular job is pinned), whether the balance covers it, and a quote_id valid fo"
     },
     {
       "name": "create_job",
@@ -58,6 +58,10 @@
     {
       "name": "create_prefilled_job",
       "description": "Posts a ready-made job from a link, e.g."
+    },
+    {
+      "name": "create_survey",
+      "description": "Posts a survey that real workers answer on RapidWorkers, built from your questions (choice, dropdown, rating with stars, agree scales or NPS, matrix, ranking, text, number, date, consent, text blocks "
     },
     {
       "name": "create_ai_task",
@@ -69,11 +73,11 @@
     },
     {
       "name": "list_jobs",
-      "description": "Lists the account's jobs with status (Pending, Active, Completed, Canceled, Rejected), progress and pending submission counts."
+      "description": "Lists the account's jobs with status (Pending, Active, Completed, Canceled, Rejected), progress and pending submission counts, newest first."
     },
     {
       "name": "get_job",
-      "description": "Returns one job or AI task by id with its brief, pay, targeting and progress."
+      "description": "Returns one job, survey or AI task by id with its brief, pay, targeting and progress; for a survey also its questions (keys q_1, q_2, ..."
     },
     {
       "name": "extend_job",
@@ -86,6 +90,10 @@
     {
       "name": "list_submissions",
       "description": "Lists submissions for a job, newest first, filtered by status (Pending, Approved, Rejected)."
+    },
+    {
+      "name": "get_survey_results",
+      "description": "Returns the aggregated results of a survey (job_id from create_survey or list_jobs with kind \"survey\"): the response funnel (started, screened out, submitted, pending, approved, rejected), median time"
     },
     {
       "name": "approve_submission",
@@ -101,7 +109,7 @@
     },
     {
       "name": "block_worker",
-      "description": "Blocks a worker (worker_id from list_submissions of a regular job) from all of the account's jobs and rejects their pending submissions."
+      "description": "Blocks a worker (worker_id from list_submissions of a regular job or a survey) from all of the account's jobs and rejects their pending submissions."
     },
     {
       "name": "unblock_worker",

@@ -34,6 +34,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "preview_job_cost",
     "create_job",
     "create_prefilled_job",
+    "create_survey",
     "create_ai_task",
     "request_ai_task_access",
     "list_jobs",
@@ -41,6 +42,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "extend_job",
     "cancel_job",
     "list_submissions",
+    "get_survey_results",
     "approve_submission",
     "reject_submission",
     "approve_all_pending",
@@ -59,6 +61,7 @@ pub fn tool_meta(name: &str) -> Option<ToolMeta> {
         "preview_job_cost" => (true, false, true),
         "create_job" => (false, true, true),
         "create_prefilled_job" => (false, true, true),
+        "create_survey" => (false, true, true),
         "create_ai_task" => (false, true, true),
         "request_ai_task_access" => (false, false, true),
         "list_jobs" => (true, false, true),
@@ -66,6 +69,7 @@ pub fn tool_meta(name: &str) -> Option<ToolMeta> {
         "extend_job" => (false, true, true),
         "cancel_job" => (false, true, true),
         "list_submissions" => (true, false, true),
+        "get_survey_results" => (true, false, true),
         "approve_submission" => (false, true, true),
         "reject_submission" => (false, true, true),
         "approve_all_pending" => (false, true, true),
@@ -100,6 +104,9 @@ pub enum PlatformInfoSection {
     /// `"ai_task_types"`
     #[serde(rename = "ai_task_types")]
     AiTaskTypes,
+    /// `"survey_builder"`
+    #[serde(rename = "survey_builder")]
+    SurveyBuilder,
     /// `"countries"`
     #[serde(rename = "countries")]
     Countries,
@@ -114,6 +121,7 @@ impl PlatformInfoSection {
             Self::Categories => "categories",
             Self::PrefilledJobTypes => "prefilled_job_types",
             Self::AiTaskTypes => "ai_task_types",
+            Self::SurveyBuilder => "survey_builder",
             Self::Countries => "countries",
         }
     }
@@ -164,6 +172,9 @@ pub enum JobKind {
     /// `"ai_task"`
     #[serde(rename = "ai_task")]
     AiTask,
+    /// `"survey"`
+    #[serde(rename = "survey")]
+    Survey,
 }
 
 impl JobKind {
@@ -172,6 +183,7 @@ impl JobKind {
         match self {
             Self::Job => "job",
             Self::AiTask => "ai_task",
+            Self::Survey => "survey",
         }
     }
 }
@@ -233,6 +245,394 @@ impl PrefilledJobType {
 }
 
 impl std::fmt::Display for PrefilledJobType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `type` (`CreateSurveyQuestion`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum CreateSurveyQuestionType {
+    /// `"single_choice"`
+    #[serde(rename = "single_choice")]
+    SingleChoice,
+    /// `"multiple_choice"`
+    #[serde(rename = "multiple_choice")]
+    MultipleChoice,
+    /// `"dropdown"`
+    #[serde(rename = "dropdown")]
+    Dropdown,
+    /// `"rating"`
+    #[serde(rename = "rating")]
+    Rating,
+    /// `"matrix"`
+    #[serde(rename = "matrix")]
+    Matrix,
+    /// `"ranking"`
+    #[serde(rename = "ranking")]
+    Ranking,
+    /// `"short_text"`
+    #[serde(rename = "short_text")]
+    ShortText,
+    /// `"long_text"`
+    #[serde(rename = "long_text")]
+    LongText,
+    /// `"number"`
+    #[serde(rename = "number")]
+    Number,
+    /// `"date"`
+    #[serde(rename = "date")]
+    Date,
+    /// `"consent"`
+    #[serde(rename = "consent")]
+    Consent,
+    /// `"statement"`
+    #[serde(rename = "statement")]
+    Statement,
+    /// `"attention_check"`
+    #[serde(rename = "attention_check")]
+    AttentionCheck,
+}
+
+impl CreateSurveyQuestionType {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::SingleChoice => "single_choice",
+            Self::MultipleChoice => "multiple_choice",
+            Self::Dropdown => "dropdown",
+            Self::Rating => "rating",
+            Self::Matrix => "matrix",
+            Self::Ranking => "ranking",
+            Self::ShortText => "short_text",
+            Self::LongText => "long_text",
+            Self::Number => "number",
+            Self::Date => "date",
+            Self::Consent => "consent",
+            Self::Statement => "statement",
+            Self::AttentionCheck => "attention_check",
+        }
+    }
+}
+
+impl std::fmt::Display for CreateSurveyQuestionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `preset` (`CreateSurveyQuestionScale`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Preset {
+    /// `"stars_5"`
+    #[serde(rename = "stars_5")]
+    Stars5,
+    /// `"agree_5"`
+    #[serde(rename = "agree_5")]
+    Agree5,
+    /// `"agree_7"`
+    #[serde(rename = "agree_7")]
+    Agree7,
+    /// `"nps"`
+    #[serde(rename = "nps")]
+    Nps,
+    /// `"custom"`
+    #[serde(rename = "custom")]
+    Custom,
+}
+
+impl Preset {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stars5 => "stars_5",
+            Self::Agree5 => "agree_5",
+            Self::Agree7 => "agree_7",
+            Self::Nps => "nps",
+            Self::Custom => "custom",
+        }
+    }
+}
+
+impl std::fmt::Display for Preset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `operator` (`CreateSurveyQuestionShowIfItem`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Operator {
+    /// `"is"`
+    #[serde(rename = "is")]
+    Is,
+    /// `"is_not"`
+    #[serde(rename = "is_not")]
+    IsNot,
+    /// `"answered"`
+    #[serde(rename = "answered")]
+    Answered,
+    /// `"not_answered"`
+    #[serde(rename = "not_answered")]
+    NotAnswered,
+    /// `"includes"`
+    #[serde(rename = "includes")]
+    Includes,
+    /// `"excludes"`
+    #[serde(rename = "excludes")]
+    Excludes,
+    /// `"eq"`
+    #[serde(rename = "eq")]
+    Eq,
+    /// `"gte"`
+    #[serde(rename = "gte")]
+    Gte,
+    /// `"lte"`
+    #[serde(rename = "lte")]
+    Lte,
+}
+
+impl Operator {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Is => "is",
+            Self::IsNot => "is_not",
+            Self::Answered => "answered",
+            Self::NotAnswered => "not_answered",
+            Self::Includes => "includes",
+            Self::Excludes => "excludes",
+            Self::Eq => "eq",
+            Self::Gte => "gte",
+            Self::Lte => "lte",
+        }
+    }
+}
+
+impl std::fmt::Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `template` (`CreateSurveyQuestion`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Template {
+    /// `"select_option"`
+    #[serde(rename = "select_option")]
+    SelectOption,
+    /// `"agree_scale"`
+    #[serde(rename = "agree_scale")]
+    AgreeScale,
+    /// `"nonsense_statement"`
+    #[serde(rename = "nonsense_statement")]
+    NonsenseStatement,
+}
+
+impl Template {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::SelectOption => "select_option",
+            Self::AgreeScale => "agree_scale",
+            Self::NonsenseStatement => "nonsense_statement",
+        }
+    }
+}
+
+impl std::fmt::Display for Template {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `genders` (`CreateSurveyAudience`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Genders {
+    /// `"male"`
+    #[serde(rename = "male")]
+    Male,
+    /// `"female"`
+    #[serde(rename = "female")]
+    Female,
+}
+
+impl Genders {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Male => "male",
+            Self::Female => "female",
+        }
+    }
+}
+
+impl std::fmt::Display for Genders {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `education` (`CreateSurveyAudience`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Education {
+    /// `"none"`
+    #[serde(rename = "none")]
+    None,
+    /// `"primary"`
+    #[serde(rename = "primary")]
+    Primary,
+    /// `"secondary"`
+    #[serde(rename = "secondary")]
+    Secondary,
+    /// `"vocational"`
+    #[serde(rename = "vocational")]
+    Vocational,
+    /// `"some_university"`
+    #[serde(rename = "some_university")]
+    SomeUniversity,
+    /// `"associate"`
+    #[serde(rename = "associate")]
+    Associate,
+    /// `"bachelor"`
+    #[serde(rename = "bachelor")]
+    Bachelor,
+    /// `"master"`
+    #[serde(rename = "master")]
+    Master,
+    /// `"doctorate"`
+    #[serde(rename = "doctorate")]
+    Doctorate,
+    /// `"professional"`
+    #[serde(rename = "professional")]
+    Professional,
+}
+
+impl Education {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Primary => "primary",
+            Self::Secondary => "secondary",
+            Self::Vocational => "vocational",
+            Self::SomeUniversity => "some_university",
+            Self::Associate => "associate",
+            Self::Bachelor => "bachelor",
+            Self::Master => "master",
+            Self::Doctorate => "doctorate",
+            Self::Professional => "professional",
+        }
+    }
+}
+
+impl std::fmt::Display for Education {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `occupations` (`CreateSurveyAudience`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Occupations {
+    /// `"student"`
+    #[serde(rename = "student")]
+    Student,
+    /// `"unemployed"`
+    #[serde(rename = "unemployed")]
+    Unemployed,
+    /// `"homemaker"`
+    #[serde(rename = "homemaker")]
+    Homemaker,
+    /// `"retired"`
+    #[serde(rename = "retired")]
+    Retired,
+    /// `"freelancer"`
+    #[serde(rename = "freelancer")]
+    Freelancer,
+    /// `"technology"`
+    #[serde(rename = "technology")]
+    Technology,
+    /// `"healthcare"`
+    #[serde(rename = "healthcare")]
+    Healthcare,
+    /// `"education"`
+    #[serde(rename = "education")]
+    Education,
+    /// `"finance"`
+    #[serde(rename = "finance")]
+    Finance,
+    /// `"legal"`
+    #[serde(rename = "legal")]
+    Legal,
+    /// `"engineering"`
+    #[serde(rename = "engineering")]
+    Engineering,
+    /// `"sales"`
+    #[serde(rename = "sales")]
+    Sales,
+    /// `"hospitality"`
+    #[serde(rename = "hospitality")]
+    Hospitality,
+    /// `"transport"`
+    #[serde(rename = "transport")]
+    Transport,
+    /// `"construction"`
+    #[serde(rename = "construction")]
+    Construction,
+    /// `"agriculture"`
+    #[serde(rename = "agriculture")]
+    Agriculture,
+    /// `"government"`
+    #[serde(rename = "government")]
+    Government,
+    /// `"media"`
+    #[serde(rename = "media")]
+    Media,
+    /// `"science"`
+    #[serde(rename = "science")]
+    Science,
+    /// `"other"`
+    #[serde(rename = "other")]
+    Other,
+}
+
+impl Occupations {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Student => "student",
+            Self::Unemployed => "unemployed",
+            Self::Homemaker => "homemaker",
+            Self::Retired => "retired",
+            Self::Freelancer => "freelancer",
+            Self::Technology => "technology",
+            Self::Healthcare => "healthcare",
+            Self::Education => "education",
+            Self::Finance => "finance",
+            Self::Legal => "legal",
+            Self::Engineering => "engineering",
+            Self::Sales => "sales",
+            Self::Hospitality => "hospitality",
+            Self::Transport => "transport",
+            Self::Construction => "construction",
+            Self::Agriculture => "agriculture",
+            Self::Government => "government",
+            Self::Media => "media",
+            Self::Science => "science",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl std::fmt::Display for Occupations {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -434,12 +834,101 @@ impl std::fmt::Display for SubmissionStatus {
     }
 }
 
+/// Values of `quality_band` (`list_submissions`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum QualityBand {
+    /// `"good"`
+    #[serde(rename = "good")]
+    Good,
+    /// `"check"`
+    #[serde(rename = "check")]
+    Check,
+    /// `"likely_bad"`
+    #[serde(rename = "likely_bad")]
+    LikelyBad,
+}
+
+impl QualityBand {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Good => "good",
+            Self::Check => "check",
+            Self::LikelyBad => "likely_bad",
+        }
+    }
+}
+
+impl std::fmt::Display for QualityBand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `include` (`get_survey_results`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Include {
+    /// `"valid"`
+    #[serde(rename = "valid")]
+    Valid,
+    /// `"approved"`
+    #[serde(rename = "approved")]
+    Approved,
+    /// `"all"`
+    #[serde(rename = "all")]
+    All,
+}
+
+impl Include {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Valid => "valid",
+            Self::Approved => "approved",
+            Self::All => "all",
+        }
+    }
+}
+
+impl std::fmt::Display for Include {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Values of `only_quality_band` (`approve_all_pending`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum OnlyQualityBand {
+    /// `"good"`
+    #[serde(rename = "good")]
+    Good,
+}
+
+impl OnlyQualityBand {
+    /// The value sent to the server.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Good => "good",
+        }
+    }
+}
+
+impl std::fmt::Display for OnlyQualityBand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Arguments of [`Client::get_platform_info`] (tool `get_platform_info`).
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct GetPlatformInfoParams {
     /// Return only one part: limits (pay, quantity, deposit, fees), categories (with sub-category
-    /// codes), prefilled_job_types, ai_task_types or countries. Default all.
+    /// codes), prefilled_job_types, ai_task_types, survey_builder (question types, scale presets,
+    /// attention check templates, survey limits and audience codes) or countries. Default all.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub section: Option<PlatformInfoSection>,
 }
@@ -452,7 +941,9 @@ impl GetPlatformInfoParams {
     }
 
     /// Sets `section`: Return only one part: limits (pay, quantity, deposit, fees), categories
-    /// (with sub-category codes), prefilled_job_types, ai_task_types or countries. Default all.
+    /// (with sub-category codes), prefilled_job_types, ai_task_types, survey_builder (question
+    /// types, scale presets, attention check templates, survey limits and audience codes) or
+    /// countries. Default all.
     #[must_use]
     pub fn section(mut self, section: PlatformInfoSection) -> Self {
         self.section = Some(section);
@@ -495,11 +986,13 @@ impl GetDepositLinkParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct PreviewJobCostParams {
-    /// USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks).
+    /// USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks, 0.50 for
+    /// surveys).
     pub pay_rate: f64,
-    /// Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+    /// Number of workers (one submission each). At least 10; AI tasks and surveys at most 20,000.
     pub quantity: u64,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Regular jobs only: pin the job to the top of the job list for $10. Default false.
@@ -519,8 +1012,8 @@ impl PreviewJobCostParams {
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -553,9 +1046,10 @@ pub struct CreateJobParams {
     pub category: String,
     /// Sub-category code from get_platform_info within that category, e.g. "2301".
     pub sub_category: String,
-    /// USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks).
+    /// USD paid to each worker, at most 2 decimals. At least 0.05 (0.10 for AI tasks, 0.50 for
+    /// surveys).
     pub pay_rate: f64,
-    /// Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+    /// Number of workers (one submission each). At least 10; AI tasks and surveys at most 20,000.
     pub quantity: u64,
     /// Honest estimate of the minutes one worker needs to finish the task.
     pub length_in_minutes: u64,
@@ -714,7 +1208,7 @@ pub struct CreatePrefilledJobParams {
     pub r#type: PrefilledJobType,
     /// Full URL of the post, profile or page, on the platform the type is for.
     pub link: String,
-    /// Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+    /// Number of workers (one submission each). At least 10; AI tasks and surveys at most 20,000.
     pub quantity: u64,
     /// quote_id from preview_job_cost for exactly this kind, pay rate, quantity and pin. Valid for
     /// 10 minutes.
@@ -848,13 +1342,650 @@ impl CreatePrefilledJobParams {
     }
 }
 
+/// Arguments of [`Client::create_survey`] (tool `create_survey`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CreateSurveyParams {
+    /// Short title workers see in the survey list (up to 200 characters).
+    pub title: String,
+    /// Intro workers read before they start: what the survey is about and anything they should
+    /// know. Plain text (up to 5,000 characters), each paragraph on its own line. Say nothing about
+    /// which answers screen people out.
+    pub description: String,
+    /// The survey items in order: 1 to 60, at most 50 that take an answer. Their keys are q_1, q_2,
+    /// ... by position (text blocks count); show_if refers to them. Example:
+    /// [{"type":"single_choice","label":"Do you drive a car at least once a
+    /// week?","options":["Yes","No"],"screener":true,"disqualify":["No"]},{"type":"rating","label":"How
+    /// likely are you to recommend your car brand to a
+    /// friend?","scale":{"preset":"nps"}},{"type":"long_text","label":"What would make you more
+    /// likely to recommend
+    /// it?","show_if":[{"question":"q_2","operator":"lte","value":"6"}]},{"type":"attention_check","template":"select_option"}]
+    pub questions: Vec<CreateSurveyQuestion>,
+    /// USD paid for each completed response, at least 0.50, at most 2 decimals. Workers see the
+    /// effective hourly pay (pay_rate x 60 / minutes).
+    pub pay_rate: f64,
+    /// Number of responses wanted (one per worker), 10 to 20,000.
+    pub quantity: u64,
+    /// ISO 3166-1 alpha-2 codes of the countries workers must be in, e.g. ["US", "GB"], or ["All"]
+    /// for every country. get_platform_info lists the allowed codes. Required for surveys.
+    pub countries: Vec<String>,
+    /// quote_id from preview_job_cost for exactly this kind, pay rate, quantity and pin. Valid for
+    /// 10 minutes.
+    pub quote_id: String,
+    /// Must be true, and only after the user explicitly approved this action and its cost.
+    pub confirm: bool,
+    /// Optional: honest minutes one response takes. Leave out for our estimate from the questions
+    /// (about 8 seconds per closed question, 30 per short text and 60 per long text answer).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub length_in_minutes: Option<u64>,
+    /// Only with countries ["All"] (or omitted): country codes to leave out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded_countries: Option<Vec<String>>,
+    /// Optional: who may answer, on top of countries. Leave out for everyone. Only workers with a
+    /// completed profile match a filter, so every filter shrinks the pool: set only what the user
+    /// asked for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audience: Option<CreateSurveyAudience>,
+    /// true stops workers pasting into text answers, so they must type them. Default false; pasted
+    /// answers are flagged either way.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_paste: Option<bool>,
+    /// Optional, recommended when a picture would help workers. Describe ONE image we generate with
+    /// AI (no extra cost) and show workers next to the instructions; it appears a minute or two
+    /// after creation. We expand your description into a full design brief using the job details,
+    /// so focus on intent and specifics: what the image is for (e.g. an example of a correct
+    /// submission), photo or illustration, the exact layout and count (a grid of 2, 3, 4, 6 or 9
+    /// works best), what each part shows, and any exact text in quotes (a title, short labels).
+    /// Example: "Photorealistic 3x3 grid of the same adult from nine angles (front, left 45, right
+    /// 45, left profile, right profile, looking up, looking down, tilt left, tilt right), plain
+    /// light background, a label under each photo, title "Required face angles"". If you do not
+    /// know what the image should show (the product, page or expected result), ask the user before
+    /// creating. Leave out if no image is wanted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_prompt: Option<String>,
+    /// Optional. Created automatically when omitted and reused on retries. A new unique string for
+    /// this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again
+    /// only to retry a call that timed out or could not reach the API, so it is never done twice.
+    /// After an error answer, fix the cause and use a new key: the API replays its stored answer to
+    /// a reused key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+impl CreateSurveyParams {
+    /// Arguments with the required `title`, `description`, `questions`, `pay_rate`, `quantity`,
+    /// `countries`, `quote_id`, `confirm`; optional fields start unset.
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        title: impl Into<String>,
+        description: impl Into<String>,
+        questions: impl IntoIterator<Item = CreateSurveyQuestion>,
+        pay_rate: f64,
+        quantity: u64,
+        countries: impl IntoIterator<Item = impl Into<String>>,
+        quote_id: impl Into<String>,
+        confirm: bool,
+    ) -> Self {
+        Self {
+            title: title.into(),
+            description: description.into(),
+            questions: questions.into_iter().collect(),
+            pay_rate,
+            quantity,
+            countries: countries.into_iter().map(Into::into).collect(),
+            quote_id: quote_id.into(),
+            confirm,
+            length_in_minutes: None,
+            excluded_countries: None,
+            audience: None,
+            block_paste: None,
+            image_prompt: None,
+            idempotency_key: None,
+        }
+    }
+
+    /// Sets `length_in_minutes`: Optional: honest minutes one response takes. Leave out for our
+    /// estimate from the questions (about 8 seconds per closed question, 30 per short text and 60
+    /// per long text answer).
+    #[must_use]
+    pub fn length_in_minutes(mut self, length_in_minutes: u64) -> Self {
+        self.length_in_minutes = Some(length_in_minutes);
+        self
+    }
+
+    /// Sets `excluded_countries`: Only with countries ["All"] (or omitted): country codes to leave
+    /// out.
+    #[must_use]
+    pub fn excluded_countries(
+        mut self,
+        excluded_countries: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.excluded_countries = Some(excluded_countries.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Sets `audience`: Optional: who may answer, on top of countries. Leave out for everyone. Only
+    /// workers with a completed profile match a filter, so every filter shrinks the pool: set only
+    /// what the user asked for.
+    #[must_use]
+    pub fn audience(mut self, audience: CreateSurveyAudience) -> Self {
+        self.audience = Some(audience);
+        self
+    }
+
+    /// Sets `block_paste`: true stops workers pasting into text answers, so they must type them.
+    /// Default false; pasted answers are flagged either way.
+    #[must_use]
+    pub fn block_paste(mut self, block_paste: bool) -> Self {
+        self.block_paste = Some(block_paste);
+        self
+    }
+
+    /// Sets `image_prompt`: Optional, recommended when a picture would help workers. Describe ONE
+    /// image we generate with AI (no extra cost) and show workers next to the instructions; it
+    /// appears a minute or two after creation. We expand your description into a full design brief
+    /// using the job details, so focus on intent and specifics: what the image is for (e.g. an
+    /// example of a correct submission), photo or illustration, the exact layout and count (a grid
+    /// of 2, 3, 4, 6 or 9 works best), what each part shows, and any exact text in quotes (a title,
+    /// short labels). Example: "Photorealistic 3x3 grid of the same adult from nine angles (front,
+    /// left 45, right 45, left profile, right profile, looking up, looking down, tilt left, tilt
+    /// right), plain light background, a label under each photo, title "Required face angles"". If
+    /// you do not know what the image should show (the product, page or expected result), ask the
+    /// user before creating. Leave out if no image is wanted.
+    #[must_use]
+    pub fn image_prompt(mut self, image_prompt: impl Into<String>) -> Self {
+        self.image_prompt = Some(image_prompt.into());
+        self
+    }
+
+    /// Sets `idempotency_key`: Optional. Created automatically when omitted and reused on retries.
+    /// A new unique string for this action (e.g. a UUID; letters, digits, _ . : - only, up to 128).
+    /// Send the same key again only to retry a call that timed out or could not reach the API, so
+    /// it is never done twice. After an error answer, fix the cause and use a new key: the API
+    /// replays its stored answer to a reused key.
+    #[must_use]
+    pub fn idempotency_key(mut self, idempotency_key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(idempotency_key.into());
+        self
+    }
+}
+
+/// The `scale` object in [`CreateSurveyParams`].
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CreateSurveyQuestionScale {
+    /// stars_5 (1-5 stars), agree_5 (1 strongly disagree to 5 strongly agree), agree_7 (1-7), nps
+    /// (0-10, rating only) or custom (set min, max and the end labels).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preset: Option<Preset>,
+    /// custom only: the first point, 0 or 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<u64>,
+    /// custom only: the last point; 2 to 11 points in all (a matrix 2 to 7).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<u64>,
+    /// custom only: text at the low end, e.g. "Not at all".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_label: Option<String>,
+    /// custom only: text at the high end, e.g. "Very much".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_label: Option<String>,
+}
+
+impl CreateSurveyQuestionScale {
+    /// Arguments with every optional field unset.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets `preset`: stars_5 (1-5 stars), agree_5 (1 strongly disagree to 5 strongly agree),
+    /// agree_7 (1-7), nps (0-10, rating only) or custom (set min, max and the end labels).
+    #[must_use]
+    pub fn preset(mut self, preset: Preset) -> Self {
+        self.preset = Some(preset);
+        self
+    }
+
+    /// Sets `min`: custom only: the first point, 0 or 1.
+    #[must_use]
+    pub fn min(mut self, min: u64) -> Self {
+        self.min = Some(min);
+        self
+    }
+
+    /// Sets `max`: custom only: the last point; 2 to 11 points in all (a matrix 2 to 7).
+    #[must_use]
+    pub fn max(mut self, max: u64) -> Self {
+        self.max = Some(max);
+        self
+    }
+
+    /// Sets `min_label`: custom only: text at the low end, e.g. "Not at all".
+    #[must_use]
+    pub fn min_label(mut self, min_label: impl Into<String>) -> Self {
+        self.min_label = Some(min_label.into());
+        self
+    }
+
+    /// Sets `max_label`: custom only: text at the high end, e.g. "Very much".
+    #[must_use]
+    pub fn max_label(mut self, max_label: impl Into<String>) -> Self {
+        self.max_label = Some(max_label.into());
+        self
+    }
+}
+
+/// One entry of `show_if` in [`CreateSurveyParams`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CreateSurveyQuestionShowIfItem {
+    /// Key of an EARLIER single_choice, multiple_choice, dropdown, rating, number, text, date or
+    /// consent question, e.g. "q_2".
+    pub question: String,
+    /// single_choice and dropdown: is, is_not; multiple_choice: includes, excludes; rating and
+    /// number: eq, gte, lte; any of them: answered, not_answered.
+    pub operator: Operator,
+    /// is, is_not, includes, excludes: the exact option text (or "other", or the none_option text).
+    /// eq, gte, lte: a number written as text, e.g. "7". Leave out for answered and not_answered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+impl CreateSurveyQuestionShowIfItem {
+    /// Arguments with the required `question`, `operator`; optional fields start unset.
+    #[must_use]
+    pub fn new(question: impl Into<String>, operator: Operator) -> Self {
+        Self {
+            question: question.into(),
+            operator,
+            value: None,
+        }
+    }
+
+    /// Sets `value`: is, is_not, includes, excludes: the exact option text (or "other", or the
+    /// none_option text). eq, gte, lte: a number written as text, e.g. "7". Leave out for answered
+    /// and not_answered.
+    #[must_use]
+    pub fn value(mut self, value: impl Into<String>) -> Self {
+        self.value = Some(value.into());
+        self
+    }
+}
+
+/// One entry of `questions` in [`CreateSurveyParams`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CreateSurveyQuestion {
+    /// single_choice (pick one), multiple_choice (pick several), dropdown (pick one from a long
+    /// list), rating (one scale), matrix (several statements on one scale), ranking (order every
+    /// option), short_text, long_text, number, date, consent (agree to a statement), statement (a
+    /// text block, no answer) or attention_check (a platform check with its own wording).
+    #[serde(rename = "type")]
+    pub r#type: CreateSurveyQuestionType,
+    /// The question as workers see it, plain text (up to 500 characters). Required except for
+    /// attention_check. statement: the heading; consent: what the worker agrees to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Optional note under the question (up to 1,000 characters); for a statement, its body text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help_text: Option<String>,
+    /// Whether an answer is needed (default true). Screening questions and attention checks are
+    /// always required.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required: Option<bool>,
+    /// single_choice and multiple_choice: 2 to 20 choices; dropdown: 2 to 100; ranking: 2 to 10
+    /// items to put in order. Unique texts up to 200 characters. Leave "Other" and "None of the
+    /// above" out: use allow_other and none_option.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<String>>,
+    /// single_choice and multiple_choice: add "Other (please specify)" with a write-in box.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_other: Option<bool>,
+    /// multiple_choice: text of an exclusive choice that clears the others, e.g. "None of the
+    /// above".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub none_option: Option<String>,
+    /// single_choice, multiple_choice and ranking: shuffle the options for each worker (Other and
+    /// None stay last), against order bias in unordered lists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub randomize_options: Option<bool>,
+    /// multiple_choice: fewest choices a worker must tick.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_choices: Option<u64>,
+    /// multiple_choice: most choices a worker may tick.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_choices: Option<u64>,
+    /// rating and matrix: the answer scale. Default stars_5 for rating, agree_5 for matrix.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale: Option<CreateSurveyQuestionScale>,
+    /// matrix: 2 to 10 statements, each rated on the shared scale.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rows: Option<Vec<String>>,
+    /// short_text and long_text: fewest characters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_length: Option<u64>,
+    /// short_text (up to 500, default 500) and long_text (up to 10,000, default 2,000): most
+    /// characters.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_length: Option<u64>,
+    /// number: smallest allowed answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    /// number: largest allowed answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    /// number: whole numbers only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub integer: Option<bool>,
+    /// Show this item only when every condition holds (up to 3). Not on screening questions or
+    /// attention checks. Hidden questions are skipped and never required.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_if: Option<Vec<CreateSurveyQuestionShowIfItem>>,
+    /// Screening question (single_choice, multiple_choice or dropdown; up to 5, all before any
+    /// other question). A worker who picks a disqualify answer leaves the survey unpaid, without a
+    /// rejection, and the slot reopens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screener: Option<bool>,
+    /// Screening questions only: the exact option texts that screen a worker out (at least one
+    /// option must let them continue). Never shown to workers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disqualify: Option<Vec<String>>,
+    /// Start a new page at this item. A page break always follows the screening questions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_break_before: Option<bool>,
+    /// attention_check only: select_option (pick the named colour), agree_scale (pick the named
+    /// agreement level) or nonsense_statement (disagree with an absurd statement). The platform
+    /// writes the wording and the right answer for each worker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<Template>,
+}
+
+impl CreateSurveyQuestion {
+    /// Arguments with the required `type`; optional fields start unset.
+    #[must_use]
+    pub fn new(r#type: CreateSurveyQuestionType) -> Self {
+        Self {
+            r#type,
+            label: None,
+            help_text: None,
+            required: None,
+            options: None,
+            allow_other: None,
+            none_option: None,
+            randomize_options: None,
+            min_choices: None,
+            max_choices: None,
+            scale: None,
+            rows: None,
+            min_length: None,
+            max_length: None,
+            min: None,
+            max: None,
+            integer: None,
+            show_if: None,
+            screener: None,
+            disqualify: None,
+            page_break_before: None,
+            template: None,
+        }
+    }
+
+    /// Sets `label`: The question as workers see it, plain text (up to 500 characters). Required
+    /// except for attention_check. statement: the heading; consent: what the worker agrees to.
+    #[must_use]
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Sets `help_text`: Optional note under the question (up to 1,000 characters); for a
+    /// statement, its body text.
+    #[must_use]
+    pub fn help_text(mut self, help_text: impl Into<String>) -> Self {
+        self.help_text = Some(help_text.into());
+        self
+    }
+
+    /// Sets `required`: Whether an answer is needed (default true). Screening questions and
+    /// attention checks are always required.
+    #[must_use]
+    pub fn required(mut self, required: bool) -> Self {
+        self.required = Some(required);
+        self
+    }
+
+    /// Sets `options`: single_choice and multiple_choice: 2 to 20 choices; dropdown: 2 to 100;
+    /// ranking: 2 to 10 items to put in order. Unique texts up to 200 characters. Leave "Other" and
+    /// "None of the above" out: use allow_other and none_option.
+    #[must_use]
+    pub fn options(mut self, options: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.options = Some(options.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Sets `allow_other`: single_choice and multiple_choice: add "Other (please specify)" with a
+    /// write-in box.
+    #[must_use]
+    pub fn allow_other(mut self, allow_other: bool) -> Self {
+        self.allow_other = Some(allow_other);
+        self
+    }
+
+    /// Sets `none_option`: multiple_choice: text of an exclusive choice that clears the others,
+    /// e.g. "None of the above".
+    #[must_use]
+    pub fn none_option(mut self, none_option: impl Into<String>) -> Self {
+        self.none_option = Some(none_option.into());
+        self
+    }
+
+    /// Sets `randomize_options`: single_choice, multiple_choice and ranking: shuffle the options
+    /// for each worker (Other and None stay last), against order bias in unordered lists.
+    #[must_use]
+    pub fn randomize_options(mut self, randomize_options: bool) -> Self {
+        self.randomize_options = Some(randomize_options);
+        self
+    }
+
+    /// Sets `min_choices`: multiple_choice: fewest choices a worker must tick.
+    #[must_use]
+    pub fn min_choices(mut self, min_choices: u64) -> Self {
+        self.min_choices = Some(min_choices);
+        self
+    }
+
+    /// Sets `max_choices`: multiple_choice: most choices a worker may tick.
+    #[must_use]
+    pub fn max_choices(mut self, max_choices: u64) -> Self {
+        self.max_choices = Some(max_choices);
+        self
+    }
+
+    /// Sets `scale`: rating and matrix: the answer scale. Default stars_5 for rating, agree_5 for
+    /// matrix.
+    #[must_use]
+    pub fn scale(mut self, scale: CreateSurveyQuestionScale) -> Self {
+        self.scale = Some(scale);
+        self
+    }
+
+    /// Sets `rows`: matrix: 2 to 10 statements, each rated on the shared scale.
+    #[must_use]
+    pub fn rows(mut self, rows: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.rows = Some(rows.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Sets `min_length`: short_text and long_text: fewest characters.
+    #[must_use]
+    pub fn min_length(mut self, min_length: u64) -> Self {
+        self.min_length = Some(min_length);
+        self
+    }
+
+    /// Sets `max_length`: short_text (up to 500, default 500) and long_text (up to 10,000, default
+    /// 2,000): most characters.
+    #[must_use]
+    pub fn max_length(mut self, max_length: u64) -> Self {
+        self.max_length = Some(max_length);
+        self
+    }
+
+    /// Sets `min`: number: smallest allowed answer.
+    #[must_use]
+    pub fn min(mut self, min: f64) -> Self {
+        self.min = Some(min);
+        self
+    }
+
+    /// Sets `max`: number: largest allowed answer.
+    #[must_use]
+    pub fn max(mut self, max: f64) -> Self {
+        self.max = Some(max);
+        self
+    }
+
+    /// Sets `integer`: number: whole numbers only.
+    #[must_use]
+    pub fn integer(mut self, integer: bool) -> Self {
+        self.integer = Some(integer);
+        self
+    }
+
+    /// Sets `show_if`: Show this item only when every condition holds (up to 3). Not on screening
+    /// questions or attention checks. Hidden questions are skipped and never required.
+    #[must_use]
+    pub fn show_if(
+        mut self,
+        show_if: impl IntoIterator<Item = CreateSurveyQuestionShowIfItem>,
+    ) -> Self {
+        self.show_if = Some(show_if.into_iter().collect());
+        self
+    }
+
+    /// Sets `screener`: Screening question (single_choice, multiple_choice or dropdown; up to 5,
+    /// all before any other question). A worker who picks a disqualify answer leaves the survey
+    /// unpaid, without a rejection, and the slot reopens.
+    #[must_use]
+    pub fn screener(mut self, screener: bool) -> Self {
+        self.screener = Some(screener);
+        self
+    }
+
+    /// Sets `disqualify`: Screening questions only: the exact option texts that screen a worker out
+    /// (at least one option must let them continue). Never shown to workers.
+    #[must_use]
+    pub fn disqualify(mut self, disqualify: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.disqualify = Some(disqualify.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Sets `page_break_before`: Start a new page at this item. A page break always follows the
+    /// screening questions.
+    #[must_use]
+    pub fn page_break_before(mut self, page_break_before: bool) -> Self {
+        self.page_break_before = Some(page_break_before);
+        self
+    }
+
+    /// Sets `template`: attention_check only: select_option (pick the named colour), agree_scale
+    /// (pick the named agreement level) or nonsense_statement (disagree with an absurd statement).
+    /// The platform writes the wording and the right answer for each worker.
+    #[must_use]
+    pub fn template(mut self, template: Template) -> Self {
+        self.template = Some(template);
+        self
+    }
+}
+
+/// The `audience` object in [`CreateSurveyParams`].
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct CreateSurveyAudience {
+    /// Youngest age (16 to 99).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_age: Option<u64>,
+    /// Oldest age (16 to 99).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_age: Option<u64>,
+    /// Only workers whose profile gender is one of these.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genders: Option<Vec<Genders>>,
+    /// Only workers with one of these native languages: codes such as "en", "es" or "hi"
+    /// (get_platform_info section survey_builder lists them).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_languages: Option<Vec<String>>,
+    /// Only workers whose profile highest education is one of these.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub education: Option<Vec<Education>>,
+    /// Only workers whose profile occupation is one of these.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub occupations: Option<Vec<Occupations>>,
+}
+
+impl CreateSurveyAudience {
+    /// Arguments with every optional field unset.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets `min_age`: Youngest age (16 to 99).
+    #[must_use]
+    pub fn min_age(mut self, min_age: u64) -> Self {
+        self.min_age = Some(min_age);
+        self
+    }
+
+    /// Sets `max_age`: Oldest age (16 to 99).
+    #[must_use]
+    pub fn max_age(mut self, max_age: u64) -> Self {
+        self.max_age = Some(max_age);
+        self
+    }
+
+    /// Sets `genders`: Only workers whose profile gender is one of these.
+    #[must_use]
+    pub fn genders(mut self, genders: impl IntoIterator<Item = Genders>) -> Self {
+        self.genders = Some(genders.into_iter().collect());
+        self
+    }
+
+    /// Sets `native_languages`: Only workers with one of these native languages: codes such as
+    /// "en", "es" or "hi" (get_platform_info section survey_builder lists them).
+    #[must_use]
+    pub fn native_languages(
+        mut self,
+        native_languages: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.native_languages = Some(native_languages.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Sets `education`: Only workers whose profile highest education is one of these.
+    #[must_use]
+    pub fn education(mut self, education: impl IntoIterator<Item = Education>) -> Self {
+        self.education = Some(education.into_iter().collect());
+        self
+    }
+
+    /// Sets `occupations`: Only workers whose profile occupation is one of these.
+    #[must_use]
+    pub fn occupations(mut self, occupations: impl IntoIterator<Item = Occupations>) -> Self {
+        self.occupations = Some(occupations.into_iter().collect());
+        self
+    }
+}
+
 /// Arguments of [`Client::create_ai_task`] (tool `create_ai_task`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct CreateAiTaskParams {
     /// image_collection, video_collection or audio_collection (workers upload files),
     /// text_collection (written answers) or custom_data_collection (a form you define in
-    /// submission_fields).
+    /// submission_fields). For a questionnaire use create_survey instead.
     pub task_type: AiTaskType,
     /// Short title workers see in the job list (up to 200 characters).
     pub title: String,
@@ -865,7 +1996,7 @@ pub struct CreateAiTaskParams {
     pub submission_instructions: String,
     /// USD paid to each worker, at least 0.10, at most 2 decimals.
     pub pay_rate: f64,
-    /// Number of workers (one submission each). At least 10; AI tasks at most 20,000.
+    /// Number of workers (one submission each). At least 10; AI tasks and surveys at most 20,000.
     pub quantity: u64,
     /// Honest estimate of the minutes one worker needs to finish the task.
     pub length_in_minutes: u64,
@@ -1160,7 +2291,8 @@ impl RequestAiTaskAccessParams {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ListJobsParams {
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Only jobs with this status.
@@ -1184,8 +2316,8 @@ impl ListJobsParams {
         Self::default()
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1225,9 +2357,10 @@ impl ListJobsParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct GetJobParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
 }
@@ -1242,8 +2375,8 @@ impl GetJobParams {
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1255,14 +2388,15 @@ impl GetJobParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ExtendJobParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
-    /// Worker slots to add; the cost is pay_rate x additional_quantity + commission. AI tasks can
-    /// have at most 20,000 slots in total.
+    /// Worker slots to add; the cost is pay_rate x additional_quantity + commission. AI tasks and
+    /// surveys can have at most 20,000 slots in total.
     pub additional_quantity: u64,
     /// Must be true, and only after the user explicitly approved this action and its cost.
     pub confirm: bool,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Optional. Created automatically when omitted and reused on retries. A new unique string for
@@ -1288,8 +2422,8 @@ impl ExtendJobParams {
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1312,11 +2446,12 @@ impl ExtendJobParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct CancelJobParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
     /// Must be true, and only after the user explicitly approved this action and its cost.
     pub confirm: bool,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Optional. Created automatically when omitted and reused on retries. Optional. A new unique
@@ -1340,8 +2475,8 @@ impl CancelJobParams {
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1364,14 +2499,19 @@ impl CancelJobParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ListSubmissionsParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Only submissions with this status, e.g. "Pending" to review.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<SubmissionStatus>,
+    /// Surveys only: only responses in this quality band, e.g. "likely_bad" to check the weakest
+    /// first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality_band: Option<QualityBand>,
     /// Page number, starting at 1.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u64>,
@@ -1388,13 +2528,14 @@ impl ListSubmissionsParams {
             job_id: job_id.into(),
             kind: None,
             status: None,
+            quality_band: None,
             page: None,
             page_size: None,
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1405,6 +2546,14 @@ impl ListSubmissionsParams {
     #[must_use]
     pub fn status(mut self, status: SubmissionStatus) -> Self {
         self.status = Some(status);
+        self
+    }
+
+    /// Sets `quality_band`: Surveys only: only responses in this quality band, e.g. "likely_bad" to
+    /// check the weakest first.
+    #[must_use]
+    pub fn quality_band(mut self, quality_band: QualityBand) -> Self {
+        self.quality_band = Some(quality_band);
         self
     }
 
@@ -1423,15 +2572,61 @@ impl ListSubmissionsParams {
     }
 }
 
+/// Arguments of [`Client::get_survey_results`] (tool `get_survey_results`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct GetSurveyResultsParams {
+    /// Id of the survey (job_id from create_survey, or list_jobs with kind "survey").
+    pub job_id: String,
+    /// Which responses count: "valid" (default) pending and approved ones, "approved" only approved
+    /// ones, "all" also the rejected ones. Screened-out workers never count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include: Option<Include>,
+    /// Latest written answers to show per text question and "Other" box (0 to 50, default 10), each
+    /// cut to 500 characters. list_submissions has every answer in full.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_samples: Option<u64>,
+}
+
+impl GetSurveyResultsParams {
+    /// Arguments with the required `job_id`; optional fields start unset.
+    #[must_use]
+    pub fn new(job_id: impl Into<String>) -> Self {
+        Self {
+            job_id: job_id.into(),
+            include: None,
+            text_samples: None,
+        }
+    }
+
+    /// Sets `include`: Which responses count: "valid" (default) pending and approved ones,
+    /// "approved" only approved ones, "all" also the rejected ones. Screened-out workers never
+    /// count.
+    #[must_use]
+    pub fn include(mut self, include: Include) -> Self {
+        self.include = Some(include);
+        self
+    }
+
+    /// Sets `text_samples`: Latest written answers to show per text question and "Other" box (0 to
+    /// 50, default 10), each cut to 500 characters. list_submissions has every answer in full.
+    #[must_use]
+    pub fn text_samples(mut self, text_samples: u64) -> Self {
+        self.text_samples = Some(text_samples);
+        self
+    }
+}
+
 /// Arguments of [`Client::approve_submission`] (tool `approve_submission`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ApproveSubmissionParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
     /// submission_id from list_submissions.
     pub submission_id: u64,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Optional tip in USD (0.01 to 50.00) paid from the balance to the worker in full.
@@ -1463,8 +2658,8 @@ impl ApproveSubmissionParams {
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1501,13 +2696,14 @@ impl ApproveSubmissionParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct RejectSubmissionParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
     /// submission_id from list_submissions.
     pub submission_id: u64,
     /// Shown to the worker: exactly what was missing or wrong compared with the instructions.
     pub reason: String,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
     /// Optional. Created automatically when omitted and reused on retries. A new unique string for
@@ -1533,8 +2729,8 @@ impl RejectSubmissionParams {
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
@@ -1557,13 +2753,18 @@ impl RejectSubmissionParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ApproveAllPendingParams {
-    /// Id of the job or AI task (job_id from list_jobs or from the create tool).
+    /// Id of the job, survey or AI task (job_id from list_jobs or from the create tool).
     pub job_id: String,
     /// Must be true, and only after the user explicitly approved this action and its cost.
     pub confirm: bool,
-    /// "job" (default) for regular and prefilled jobs, "ai_task" for AI data-collection tasks.
+    /// "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<JobKind>,
+    /// Surveys only: "good" approves only the Pending responses in the good quality band; the ones
+    /// to check or likely bad stay Pending for review.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub only_quality_band: Option<OnlyQualityBand>,
     /// Optional. Created automatically when omitted and reused on retries. A new unique string for
     /// this action (e.g. a UUID; letters, digits, _ . : - only, up to 128). Send the same key again
     /// only to retry a call that timed out or could not reach the API, so it is never done twice.
@@ -1581,15 +2782,24 @@ impl ApproveAllPendingParams {
             job_id: job_id.into(),
             confirm,
             kind: None,
+            only_quality_band: None,
             idempotency_key: None,
         }
     }
 
-    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "ai_task" for AI
-    /// data-collection tasks.
+    /// Sets `kind`: "job" (default) for regular and prefilled jobs, "survey" for surveys made with
+    /// create_survey, "ai_task" for AI data-collection tasks.
     #[must_use]
     pub fn kind(mut self, kind: JobKind) -> Self {
         self.kind = Some(kind);
+        self
+    }
+
+    /// Sets `only_quality_band`: Surveys only: "good" approves only the Pending responses in the
+    /// good quality band; the ones to check or likely bad stay Pending for review.
+    #[must_use]
+    pub fn only_quality_band(mut self, only_quality_band: OnlyQualityBand) -> Self {
+        self.only_quality_band = Some(only_quality_band);
         self
     }
 
@@ -1609,7 +2819,7 @@ impl ApproveAllPendingParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct BlockWorkerParams {
-    /// worker_id of a submission on a regular job (from list_submissions).
+    /// worker_id of a submission on a regular job or a survey (from list_submissions).
     pub worker_id: u64,
 }
 
@@ -1647,10 +2857,12 @@ impl Client {
             .await
     }
 
-    /// Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, at least 10 workers
-    /// per job, $20 minimum deposit, commission and fees), job categories with sub-category codes,
-    /// the prefilled job types with the link each one expects, AI task types and the allowed ISO
-    /// country codes. Call it before creating a job.
+    /// Returns platform rules (minimum pay $0.05 per task, $0.10 for AI tasks, $0.50 per survey
+    /// response, at least 10 workers per job, $20 minimum deposit, commission and fees), job
+    /// categories with sub-category codes, the prefilled job types with the link each one expects,
+    /// AI task types, the survey builder options (question types, scale presets, attention check
+    /// templates, limits and audience codes) and the allowed ISO country codes. Call it before
+    /// creating a job or survey.
     ///
     /// Tool `get_platform_info`. Read-only: retried automatically after network and gateway errors.
     pub async fn get_platform_info(&self, params: GetPlatformInfoParams) -> Result<Value> {
@@ -1678,10 +2890,12 @@ impl Client {
             .await
     }
 
-    /// Calculates the exact charge for a job or AI task before creating it: pay rate x quantity +
-    /// commission (+ $10 if pinned), whether the balance covers it, and a quote_id valid for 10
-    /// minutes. Every create tool requires this quote_id, so call this first and show the total to
-    /// the user. Rules: pay_rate >= 0.05 (>= 0.10 for kind "ai_task"), quantity >= 10.
+    /// Calculates the exact charge for a job, survey or AI task before creating it: pay rate x
+    /// quantity + commission (+ $10 if a regular job is pinned), whether the balance covers it, and
+    /// a quote_id valid for 10 minutes. Every create tool requires this quote_id, so call this
+    /// first with the kind you will create ("job", "survey" or "ai_task") and show the total to the
+    /// user. Rules: pay_rate >= 0.05 (>= 0.10 for kind "ai_task", >= 0.50 for kind "survey"),
+    /// quantity >= 10 (at most 20,000 for AI tasks and surveys), pin only for kind "job".
     ///
     /// Tool `preview_job_cost`. Read-only: retried automatically after network and gateway errors.
     pub async fn preview_job_cost(&self, params: PreviewJobCostParams) -> Result<Value> {
@@ -1719,6 +2933,26 @@ impl Client {
             .await
     }
 
+    /// Posts a survey that real workers answer on RapidWorkers, built from your questions (choice,
+    /// dropdown, rating with stars, agree scales or NPS, matrix, ranking, text, number, date,
+    /// consent, text blocks and attention checks), and charges pay_rate x quantity + commission. No
+    /// extra access is needed. Requires quote_id from preview_job_cost with kind "survey",
+    /// confirm=true and an idempotency_key. pay_rate >= 0.50 per response, quantity 10 to 20,000,
+    /// countries required. Questions are keyed q_1, q_2, ... by position (text blocks count):
+    /// show_if may only point at an earlier question. Up to 5 screening questions must come first;
+    /// screened-out workers are not paid and free their slot. Add 1 attention check (2 for surveys
+    /// over 5 minutes). Every response gets a quality score; failed attention checks, impossible
+    /// speed and repeat devices are rejected automatically. Optional image_prompt: one image we
+    /// generate with AI and show workers with the survey intro.
+    ///
+    /// Tool `create_survey`. Changes your account or moves money. The call carries an idempotency
+    /// key (created when `idempotency_key` is unset) that is reused on every retry, so it never
+    /// happens twice.
+    pub async fn create_survey(&self, params: CreateSurveyParams) -> Result<Value> {
+        self.call_tool("create_survey", to_arguments(&params)?)
+            .await
+    }
+
     /// Posts an AI data-collection task (image, video, audio or text collection, or a custom form)
     /// and charges pay_rate x quantity + commission. Requires approved AI task access (see
     /// request_ai_task_access), quote_id from preview_job_cost with kind "ai_task", confirm=true
@@ -1745,16 +2979,19 @@ impl Client {
     }
 
     /// Lists the account's jobs with status (Pending, Active, Completed, Canceled, Rejected),
-    /// progress and pending submission counts. Set kind to "ai_task" for AI data-collection tasks;
-    /// the default "job" covers regular and prefilled jobs.
+    /// progress and pending submission counts, newest first. Set kind to "survey" for surveys made
+    /// with create_survey or "ai_task" for AI data-collection tasks; the default "job" covers
+    /// regular and prefilled jobs.
     ///
     /// Tool `list_jobs`. Read-only: retried automatically after network and gateway errors.
     pub async fn list_jobs(&self, params: ListJobsParams) -> Result<Value> {
         self.call_tool("list_jobs", to_arguments(&params)?).await
     }
 
-    /// Returns one job or AI task by id with its brief, pay, targeting and progress. Set kind to
-    /// "ai_task" for AI data-collection tasks; the default "job" covers regular and prefilled jobs.
+    /// Returns one job, survey or AI task by id with its brief, pay, targeting and progress; for a
+    /// survey also its questions (keys q_1, q_2, ... with option ids), audience, response counts
+    /// and quality bands. Set kind to "survey" for surveys made with create_survey or "ai_task" for
+    /// AI data-collection tasks; the default "job" covers regular and prefilled jobs.
     ///
     /// Tool `get_job`. Read-only: retried automatically after network and gateway errors.
     pub async fn get_job(&self, params: GetJobParams) -> Result<Value> {
@@ -1762,9 +2999,10 @@ impl Client {
     }
 
     /// Adds worker slots to a job and charges pay_rate x additional_quantity + commission. Regular
-    /// jobs can only be extended once completed. Requires confirm=true and an idempotency_key. Set
-    /// kind to "ai_task" for AI data-collection tasks; the default "job" covers regular and
-    /// prefilled jobs.
+    /// jobs can only be extended once completed; surveys and AI tasks can have at most 20,000 slots
+    /// in total. Requires confirm=true and an idempotency_key. Set kind to "survey" for surveys
+    /// made with create_survey or "ai_task" for AI data-collection tasks; the default "job" covers
+    /// regular and prefilled jobs.
     ///
     /// Tool `extend_job`. Changes your account or moves money. The call carries an idempotency key
     /// (created when `idempotency_key` is unset) that is reused on every retry, so it never happens
@@ -1775,8 +3013,8 @@ impl Client {
 
     /// Cancels a job and refunds the unspent budget to the balance. Pending (not yet live) jobs are
     /// refunded in full; live jobs pay a $0.20 fee and cannot be canceled while submissions await
-    /// review. Requires confirm=true. Set kind to "ai_task" for AI data-collection tasks; the
-    /// default "job" covers regular and prefilled jobs.
+    /// review. Requires confirm=true. Set kind to "survey" for surveys made with create_survey or
+    /// "ai_task" for AI data-collection tasks; the default "job" covers regular and prefilled jobs.
     ///
     /// Tool `cancel_job`. Changes your account or moves money. The call carries an idempotency key
     /// (created when `idempotency_key` is unset) that is reused on every retry, so it never happens
@@ -1786,10 +3024,13 @@ impl Client {
     }
 
     /// Lists submissions for a job, newest first, filtered by status (Pending, Approved, Rejected).
-    /// Each has the proof text, proof image links and the worker's approval rate. Paginated with
-    /// page and page_size (max 100). Pending submissions are approved automatically after 2 days if
-    /// not reviewed. Set kind to "ai_task" for AI data-collection tasks; the default "job" covers
-    /// regular and prefilled jobs.
+    /// Each has the proof text, proof image links and the worker's approval rate. For kind "survey"
+    /// each response has its answers (question key, label and the answer as text), a quality score
+    /// (0-100), a quality band (good, check, likely_bad) with the flags behind it, and whether it
+    /// was rejected automatically; quality_band filters by band. Paginated with page and page_size
+    /// (max 100). Pending submissions are approved automatically after 2 days if not reviewed. Set
+    /// kind to "survey" for surveys made with create_survey or "ai_task" for AI data-collection
+    /// tasks; the default "job" covers regular and prefilled jobs.
     ///
     /// Tool `list_submissions`. Read-only: retried automatically after network and gateway errors.
     pub async fn list_submissions(&self, params: ListSubmissionsParams) -> Result<Value> {
@@ -1797,10 +3038,25 @@ impl Client {
             .await
     }
 
+    /// Returns the aggregated results of a survey (job_id from create_survey or list_jobs with kind
+    /// "survey"): the response funnel (started, screened out, submitted, pending, approved,
+    /// rejected), median time and effective hourly pay, quality bands, and per question the answer
+    /// counts and percentages, means and medians, the NPS score, rankings, number ranges and the
+    /// latest text answers. include "valid" (default: pending and approved responses), "approved"
+    /// or "all" (adds rejected); screened-out workers never count. For each response in full use
+    /// list_submissions with kind "survey".
+    ///
+    /// Tool `get_survey_results`. Read-only: retried automatically after network and gateway
+    /// errors.
+    pub async fn get_survey_results(&self, params: GetSurveyResultsParams) -> Result<Value> {
+        self.call_tool("get_survey_results", to_arguments(&params)?)
+            .await
+    }
+
     /// Approves a submission and pays the worker from the job budget; this cannot be undone.
     /// Optional tip $0.01 to $50.00 from the balance, paid to the worker in full. Requires an
-    /// idempotency_key. Set kind to "ai_task" for AI data-collection tasks; the default "job"
-    /// covers regular and prefilled jobs.
+    /// idempotency_key. Set kind to "survey" for surveys made with create_survey or "ai_task" for
+    /// AI data-collection tasks; the default "job" covers regular and prefilled jobs.
     ///
     /// Tool `approve_submission`. Changes your account or moves money. The call carries an
     /// idempotency key (created when `idempotency_key` is unset) that is reused on every retry, so
@@ -1813,8 +3069,8 @@ impl Client {
     /// Rejects a Pending submission; the worker is not paid and sees the reason. Never reject an
     /// Approved submission: it has already been paid, and rejecting it does not take the payment
     /// back. reason is required and should say exactly what was missing. Requires an
-    /// idempotency_key. Set kind to "ai_task" for AI data-collection tasks; the default "job"
-    /// covers regular and prefilled jobs.
+    /// idempotency_key. Set kind to "survey" for surveys made with create_survey or "ai_task" for
+    /// AI data-collection tasks; the default "job" covers regular and prefilled jobs.
     ///
     /// Tool `reject_submission`. Changes your account or moves money. The call carries an
     /// idempotency key (created when `idempotency_key` is unset) that is reused on every retry, so
@@ -1825,7 +3081,9 @@ impl Client {
     }
 
     /// Approves every Pending submission on the job and pays the workers; this cannot be undone.
-    /// Requires confirm=true and an idempotency_key. Set kind to "ai_task" for AI data-collection
+    /// For a survey, only_quality_band "good" approves only the Pending responses in the good
+    /// quality band and leaves the rest for review. Requires confirm=true and an idempotency_key.
+    /// Set kind to "survey" for surveys made with create_survey or "ai_task" for AI data-collection
     /// tasks; the default "job" covers regular and prefilled jobs.
     ///
     /// Tool `approve_all_pending`. Changes your account or moves money. The call carries an
@@ -1836,8 +3094,8 @@ impl Client {
             .await
     }
 
-    /// Blocks a worker (worker_id from list_submissions of a regular job) from all of the account's
-    /// jobs and rejects their pending submissions.
+    /// Blocks a worker (worker_id from list_submissions of a regular job or a survey) from all of
+    /// the account's jobs and rejects their pending submissions.
     ///
     /// Tool `block_worker`. Idempotent: retried automatically after network and gateway errors.
     pub async fn block_worker(&self, params: BlockWorkerParams) -> Result<Value> {
